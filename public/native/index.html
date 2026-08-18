@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>PhoneCam Pro</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,33 +14,52 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             -webkit-user-select: none;
             user-select: none;
+            overflow: hidden;
         }
 
-        body {
+        /* ─── Scanner view ─────────────────────────────── */
+        #scanner-view {
+            position: fixed;
+            inset: 0;
+            background: #000;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-            padding-top: calc(24px + env(safe-area-inset-top, 0px));
-            padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+            flex-direction: column;
         }
 
-        .card {
+        #scanner-video {
+            position: absolute;
+            inset: 0;
             width: 100%;
-            max-width: 400px;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .scanner-ui {
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: calc(env(safe-area-inset-top, 0px) + 24px) 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
+            background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.15) 30%, rgba(0,0,0,0.15) 70%, rgba(0,0,0,0.75) 100%);
+            z-index: 2;
+        }
+
+        .scanner-head {
             text-align: center;
         }
 
         .logo {
-            font-size: 44px;
-            margin-bottom: 8px;
+            font-size: 42px;
+            margin-bottom: 6px;
         }
 
         h1 {
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 800;
             letter-spacing: -0.5px;
-            margin-bottom: 4px;
         }
 
         h1 span {
@@ -50,11 +69,132 @@
             background-clip: text;
         }
 
-        .subtitle {
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 14px;
-            margin-bottom: 32px;
+        .scan-title {
+            margin-top: 4px;
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
         }
+
+        .scan-subtitle {
+            margin-top: 4px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.55);
+        }
+
+        .scan-frame-wrap {
+            position: relative;
+            width: 240px;
+            height: 240px;
+        }
+
+        .scan-frame {
+            position: absolute;
+            inset: 0;
+            border: 2px solid rgba(59, 130, 246, 0.9);
+            border-radius: 20px;
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.35);
+        }
+
+        .scan-frame .corner {
+            position: absolute;
+            width: 34px;
+            height: 34px;
+            border-color: #3b82f6;
+            border-style: solid;
+            border-width: 0;
+        }
+        .corner.tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 18px; }
+        .corner.tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 18px; }
+        .corner.bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: 18px; }
+        .corner.br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 18px; }
+
+        .laser {
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent);
+            box-shadow: 0 0 12px #3b82f6;
+            animation: laser 2s ease-in-out infinite;
+        }
+
+        @keyframes laser {
+            0%   { top: 14px; opacity: 0.4; }
+            50%  { opacity: 1; }
+            100% { top: calc(100% - 14px); opacity: 0.4; }
+        }
+
+        .scanner-foot {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        #scan-status {
+            min-height: 18px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.65);
+            margin-bottom: 14px;
+        }
+
+        #scan-status.error { color: #f87171; }
+        #scan-status.success { color: #4ade80; }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .btn-secondary:active {
+            transform: scale(0.98);
+            opacity: 0.85;
+        }
+
+        /* ─── Manual view ──────────────────────────────── */
+        #manual-view {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            padding-top: calc(24px + env(safe-area-inset-top, 0px));
+            padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+            background: #0a0a1a;
+            z-index: 5;
+        }
+
+        #manual-view.active { display: flex; }
+
+        .card {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+            padding: 8px;
+        }
+
+        .back-btn:active { opacity: 0.6; }
 
         label {
             display: block;
@@ -80,15 +220,10 @@
             transition: border 0.2s;
         }
 
-        input:focus {
-            border-color: #3b82f6;
-        }
+        input:focus { border-color: #3b82f6; }
+        input::placeholder { color: rgba(255, 255, 255, 0.3); }
 
-        input::placeholder {
-            color: rgba(255, 255, 255, 0.3);
-        }
-
-        button {
+        button.primary {
             width: 100%;
             padding: 15px;
             border-radius: 12px;
@@ -101,13 +236,19 @@
             transition: opacity 0.2s, transform 0.1s;
         }
 
-        button:active {
-            transform: scale(0.98);
-            opacity: 0.9;
+        button.primary:active { transform: scale(0.98); opacity: 0.9; }
+
+        #manual-status {
+            margin-top: 16px;
+            font-size: 13px;
+            min-height: 18px;
+            color: rgba(255, 255, 255, 0.5);
         }
 
+        #manual-status.error { color: #f87171; }
+
         .hint {
-            margin-top: 24px;
+            margin-top: 20px;
             font-size: 12px;
             color: rgba(255, 255, 255, 0.35);
             line-height: 1.6;
@@ -119,43 +260,79 @@
             border-radius: 4px;
             font-size: 11px;
         }
-
-        #status {
-            margin-top: 16px;
-            font-size: 13px;
-            min-height: 18px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        #status.error { color: #f87171; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="logo">📸</div>
-        <h1>PhoneCam <span>Pro</span></h1>
-        <p class="subtitle">Convierte tu iPhone en una webcam HD</p>
+    <!-- Scanner (pantalla principal) -->
+    <div id="scanner-view">
+        <video id="scanner-video" autoplay playsinline muted></video>
+        <canvas id="scanner-canvas" style="display:none;"></canvas>
+        <div class="scanner-ui">
+            <div class="scanner-head">
+                <div class="logo">📸</div>
+                <h1>PhoneCam <span>Pro</span></h1>
+                <p class="scan-title">Escanea el QR del panel de tu PC</p>
+                <p class="scan-subtitle">Se sincronizará automáticamente con el video</p>
+            </div>
 
-        <label for="server-input">IP de tu PC</label>
-        <input id="server-input" type="text" placeholder="192.168.3.6" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <div class="scan-frame-wrap">
+                <div class="scan-frame">
+                    <span class="corner tl"></span>
+                    <span class="corner tr"></span>
+                    <span class="corner bl"></span>
+                    <span class="corner br"></span>
+                </div>
+                <div class="laser"></div>
+            </div>
 
-        <button id="connect-btn">Conectar</button>
-
-        <div id="status"></div>
-
-        <p class="hint">
-            Usa la misma dirección que ves en el panel de tu PC<br>
-            (ej. <code>192.168.3.6:3000</code>). Debe estar en la misma red WiFi.
-        </p>
+            <div class="scanner-foot">
+                <div id="scan-status"></div>
+                <button id="btn-manual" class="btn-secondary">⌨️ Ingresar IP manualmente</button>
+            </div>
+        </div>
     </div>
 
+    <!-- Entrada manual (respaldo) -->
+    <div id="manual-view">
+        <div class="card">
+            <button id="btn-back" class="back-btn">← Volver al escáner</button>
+            <div class="logo">📸</div>
+            <h1>PhoneCam <span>Pro</span></h1>
+            <p class="scan-subtitle" style="margin-bottom:24px;">Conecta manualmente</p>
+
+            <label for="server-input">IP de tu PC</label>
+            <input id="server-input" type="text" placeholder="192.168.3.6" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+            <button id="connect-btn" class="primary">Conectar</button>
+            <div id="manual-status"></div>
+
+            <p class="hint">
+                Usa la dirección que ves en el panel de tu PC<br>
+                (ej. <code>192.168.3.6:3000</code>). Debe estar en la misma red WiFi.
+            </p>
+        </div>
+    </div>
+
+    <script src="jsQR.js"></script>
     <script>
         (function () {
             'use strict';
 
+            const scannerView = document.getElementById('scanner-view');
+            const manualView = document.getElementById('manual-view');
+            const scannerVideo = document.getElementById('scanner-video');
+            const scannerCanvas = document.getElementById('scanner-canvas');
+            const scanStatus = document.getElementById('scan-status');
+            const btnManual = document.getElementById('btn-manual');
+            const btnBack = document.getElementById('btn-back');
             const input = document.getElementById('server-input');
-            const btn = document.getElementById('connect-btn');
-            const status = document.getElementById('status');
+            const connectBtn = document.getElementById('connect-btn');
+            const manualStatus = document.getElementById('manual-status');
+
+            let scanStream = null;
+            let scanAnimationId = null;
+            let scanning = false;
+            let resolved = false;
 
             // Remember last server
             const saved = localStorage.getItem('phonecam-server');
@@ -163,6 +340,124 @@
                 input.value = saved;
             }
 
+            // ─── QR Scanner ───────────────────────────────
+            function startScanner() {
+                if (scanning) return;
+                scanning = true;
+                resolved = false;
+                setScanStatus('Iniciando cámara...', '');
+
+                navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                }).then(function (stream) {
+                    scanStream = stream;
+                    scannerVideo.srcObject = stream;
+                    scannerVideo.setAttribute('playsinline', 'true');
+                    return scannerVideo.play();
+                }).then(function () {
+                    setScanStatus('Apunta al código QR del panel del PC', '');
+                    scanFrame();
+                }).catch(function (err) {
+                    console.warn('Scanner camera error:', err);
+                    scanning = false;
+                    // Fallback to manual entry
+                    manualView.classList.add('active');
+                    setScanStatus('', '');
+                    manualStatus.textContent = 'No se pudo iniciar la cámara. Ingresa la IP manualmente.';
+                    manualStatus.className = 'error';
+                });
+            }
+
+            function stopScanner() {
+                scanning = false;
+                if (scanAnimationId) {
+                    cancelAnimationFrame(scanAnimationId);
+                    scanAnimationId = null;
+                }
+                if (scanStream) {
+                    scanStream.getTracks().forEach(t => t.stop());
+                    scanStream = null;
+                }
+            }
+
+            function scanFrame() {
+                if (!scanning) return;
+
+                if (scannerVideo.readyState >= scannerVideo.HAVE_ENOUGH_DATA) {
+                    const canvas = scannerCanvas;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                    canvas.width = scannerVideo.videoWidth;
+                    canvas.height = scannerVideo.videoHeight;
+
+                    ctx.drawImage(scannerVideo, 0, 0, canvas.width, canvas.height);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    if (typeof jsQR !== 'undefined') {
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: 'dontInvert'
+                        });
+
+                        if (code && code.data) {
+                            console.log('QR detectado:', code.data);
+                            onQRScanned(code.data);
+                            return;
+                        }
+                    }
+                }
+
+                scanAnimationId = requestAnimationFrame(scanFrame);
+            }
+
+            function onQRScanned(data) {
+                if (resolved) return;
+                resolved = true;
+
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([80, 40, 80]);
+                }
+
+                setScanStatus('QR detectado, conectando...', 'success');
+                stopScanner();
+
+                // The QR contains the full URL: https://IP:3000/mobile/?room=XXXX
+                try {
+                    if (data.startsWith('http://') || data.startsWith('https://')) {
+                        const url = new URL(data);
+                        const server = url.origin;
+                        const room = url.searchParams.get('room');
+
+                        localStorage.setItem('phonecam-server', server.replace(/^https?:\/\//, ''));
+
+                        if (room) {
+                            // Navigate to mobile app with the room to auto-connect
+                            window.location.href = server + '/mobile/?room=' + room.toUpperCase();
+                        } else {
+                            window.location.href = server + '/mobile/';
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('QR parse error:', e);
+                }
+
+                // QR only contains a room code: use saved server
+                setScanStatus('QR sin servidor, usa la entrada manual', 'error');
+                manualView.classList.add('active');
+                resolved = false;
+            }
+
+            function setScanStatus(msg, type) {
+                scanStatus.textContent = msg;
+                scanStatus.className = type || '';
+            }
+
+            // ─── Manual connect ───────────────────────────
             function normalize(server) {
                 server = server.trim();
                 if (!server) return null;
@@ -177,27 +472,45 @@
             function connect() {
                 let server = normalize(input.value);
                 if (!server) {
-                    status.textContent = 'Ingresa la IP de tu PC';
-                    status.className = 'error';
+                    manualStatus.textContent = 'Ingresa la IP de tu PC';
+                    manualStatus.className = 'error';
                     return;
                 }
 
-                // Add default port if missing
                 if (!/:\d+/.test(server.split('://')[1])) {
                     server += ':3000';
                 }
 
-                status.textContent = 'Conectando...';
+                manualStatus.textContent = 'Conectando...';
+                manualStatus.className = '';
                 localStorage.setItem('phonecam-server', input.value.trim());
 
-                // Navigate the native WebView to the mobile app served by the PC
                 window.location.href = server + '/mobile/';
             }
 
-            btn.addEventListener('click', connect);
-            input.addEventListener('keypress', (e) => {
+            // ─── Events ───────────────────────────────────
+            btnManual.addEventListener('click', function () {
+                stopScanner();
+                manualView.classList.add('active');
+            });
+
+            btnBack.addEventListener('click', function () {
+                manualView.classList.remove('active');
+                startScanner();
+            });
+
+            connectBtn.addEventListener('click', connect);
+            input.addEventListener('keypress', function (e) {
                 if (e.key === 'Enter') connect();
             });
+
+            // Start scanning on launch
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                startScanner();
+            } else {
+                setScanStatus('Cámara no disponible, ingresa la IP manualmente', 'error');
+                manualView.classList.add('active');
+            }
         })();
     </script>
 </body>
