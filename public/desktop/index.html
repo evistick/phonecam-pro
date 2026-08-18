@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhoneCam Pro — Panel de Control</title>
+    <meta name="description" content="PhoneCam Pro - Convierte tu teléfono en una webcam profesional HD">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="header">
+            <div class="header-left">
+                <div class="logo">
+                    <span class="logo-icon">📸</span>
+                    <span class="logo-text">PhoneCam <span class="pro">Pro</span></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="connection-badge" class="badge disconnected">
+                    <span class="badge-dot"></span>
+                    <span id="connection-text">Sin conexión</span>
+                </div>
+                <button id="btn-theme" class="icon-btn" title="Cambiar tema">🌙</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main">
+            <!-- Left: Video Panel -->
+            <section id="video-section">
+                <!-- Connection / QR Screen -->
+                <div id="connect-panel" class="panel-card">
+                    <div class="connect-content">
+                        <div class="connect-icon">📸</div>
+                        <h2>Conecta tu teléfono</h2>
+                        <p class="connect-desc">Escanea el QR code con tu teléfono o ingresa el código manualmente</p>
+
+                        <div id="qr-container">
+                            <div id="qr-loading" class="qr-placeholder">
+                                <div class="spinner"></div>
+                                <span>Generando código...</span>
+                            </div>
+                            <img id="qr-image" alt="QR Code" style="display:none;">
+                        </div>
+
+                        <div class="room-code-display">
+                            <span class="room-label">Código de sala</span>
+                            <span id="room-code" class="room-code">------</span>
+                            <button id="btn-copy-code" class="copy-btn" title="Copiar código">📋</button>
+                        </div>
+
+                        <div class="connect-url">
+                            <span class="url-label">URL móvil</span>
+                            <span id="mobile-url" class="url-text">---</span>
+                            <button id="btn-copy-url" class="copy-btn" title="Copiar URL">📋</button>
+                        </div>
+
+                        <button id="btn-new-room" class="btn-secondary">🔄 Generar nuevo código</button>
+                    </div>
+                </div>
+
+                <!-- Video Player -->
+                <div id="video-panel" class="panel-card" style="display:none;">
+                    <div id="video-wrapper">
+                        <video id="remote-video" autoplay playsinline></video>
+
+                        <!-- Video overlays -->
+                        <div id="overlay-container">
+                            <div id="overlay-text" class="overlay-item" style="display:none;"></div>
+                            <div id="overlay-timestamp" class="overlay-item" style="display:none;"></div>
+                        </div>
+
+                        <!-- Grid guides -->
+                        <div id="grid-overlay" class="grid-overlay" style="display:none;">
+                            <div class="grid-line-h" style="top:33.33%"></div>
+                            <div class="grid-line-h" style="top:66.66%"></div>
+                            <div class="grid-line-v" style="left:33.33%"></div>
+                            <div class="grid-line-v" style="left:66.66%"></div>
+                            <div class="grid-center"></div>
+                        </div>
+
+                        <!-- Video toolbar -->
+                        <div id="video-toolbar">
+                            <div class="toolbar-left">
+                                <button id="btn-fullscreen" class="vtool-btn" title="Pantalla completa">⛶</button>
+                                <button id="btn-pip" class="vtool-btn" title="Picture-in-Picture">🖼️</button>
+                                <button id="btn-mirror-h" class="vtool-btn" title="Espejo horizontal">↔️</button>
+                                <button id="btn-mirror-v" class="vtool-btn" title="Espejo vertical">↕️</button>
+                            </div>
+                            <div class="toolbar-right">
+                                <button id="btn-screenshot" class="vtool-btn" title="Captura de pantalla">📷</button>
+                                <button id="btn-record" class="vtool-btn" title="Grabar">⏺️</button>
+                                <button id="btn-grid" class="vtool-btn" title="Guías de composición">▦</button>
+                            </div>
+                        </div>
+
+                        <!-- Recording indicator -->
+                        <div id="recording-indicator" style="display:none;">
+                            <span class="rec-dot"></span>
+                            <span id="rec-timer">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right: Control Panels -->
+            <aside id="controls-section">
+                <!-- Stats Panel -->
+                <div class="ctrl-panel" id="stats-panel">
+                    <div class="ctrl-header">
+                        <h3>📊 Monitor de Rendimiento</h3>
+                    </div>
+                    <div class="ctrl-body">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <span class="stat-label">Resolución</span>
+                                <span id="d-stat-resolution" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">FPS</span>
+                                <span id="d-stat-fps" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Bitrate</span>
+                                <span id="d-stat-bitrate" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Latencia</span>
+                                <span id="d-stat-latency" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Batería</span>
+                                <span id="d-stat-battery" class="stat-value">--</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Conexión</span>
+                                <span id="d-stat-connection" class="stat-value">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera Controls -->
+                <div class="ctrl-panel" id="camera-ctrl-panel">
+                    <div class="ctrl-header">
+                        <h3>📱 Control de Cámara</h3>
+                    </div>
+                    <div class="ctrl-body">
+                        <div class="ctrl-buttons-row">
+                            <button id="d-btn-switch" class="ctrl-action-btn" title="Cambiar cámara">
+                                <span>🔄</span> Cambiar
+                            </button>
+                            <button id="d-btn-flash" class="ctrl-action-btn" title="Flash">
+                                <span>⚡</span> Flash
+                            </button>
+                            <button id="d-btn-mic" class="ctrl-action-btn active" title="Micrófono">
+                                <span>🎤</span> Mic
+                            </button>
+                        </div>
+
+                        <!-- Resolution -->
+                        <div class="ctrl-group">
+                            <label>Resolución</label>
+                            <div class="btn-group" id="d-res-group">
+                                <button data-value="480p">480p</button>
+                                <button data-value="720p">720p</button>
+                                <button data-value="1080p" class="active">1080p</button>
+                                <button data-value="4k">4K</button>
+                            </div>
+                        </div>
+
+                        <!-- FPS -->
+                        <div class="ctrl-group">
+                            <label>FPS</label>
+                            <div class="btn-group" id="d-fps-group">
+                                <button data-value="15">15</button>
+                                <button data-value="30">30</button>
+                                <button data-value="60" class="active">60</button>
+                            </div>
+                        </div>
+
+                        <!-- Orientation (Camo-style lock) -->
+                        <div class="ctrl-group">
+                            <label>Orientación</label>
+                            <div class="btn-group" id="d-orientation-group">
+                                <button data-value="auto" class="active">Auto</button>
+                                <button data-value="portrait">Vertical</button>
+                                <button data-value="landscape">Horizontal</button>
+                            </div>
+                        </div>
+
+                        <!-- Filters -->
+                        <div class="ctrl-group">
+                            <label>Filtro</label>
+                            <select id="d-filter-select" class="ctrl-select">
+                                <option value="none">Normal</option>
+                                <option value="grayscale">Blanco y Negro</option>
+                                <option value="sepia">Sepia</option>
+                                <option value="vintage">Vintage</option>
+                                <option value="contrast">Alto Contraste</option>
+                                <option value="invert">Negativo</option>
+                                <option value="warm">Cálido</option>
+                                <option value="cool">Frío</option>
+                                <option value="saturate">Saturado</option>
+                            </select>
+                        </div>
+
+                        <!-- Brightness -->
+                        <div class="ctrl-group">
+                            <label>Brillo <span id="d-brightness-val">100%</span></label>
+                            <input type="range" id="d-brightness" min="50" max="200" value="100">
+                        </div>
+
+                        <!-- Contrast -->
+                        <div class="ctrl-group">
+                            <label>Contraste <span id="d-contrast-val">100%</span></label>
+                            <input type="range" id="d-contrast" min="50" max="200" value="100">
+                        </div>
+
+                        <!-- Saturation -->
+                        <div class="ctrl-group">
+                            <label>Saturación <span id="d-saturation-val">100%</span></label>
+                            <input type="range" id="d-saturation" min="0" max="300" value="100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Overlays Panel -->
+                <div class="ctrl-panel" id="overlay-panel">
+                    <div class="ctrl-header">
+                        <h3>🎨 Overlays</h3>
+                    </div>
+                    <div class="ctrl-body">
+                        <!-- Text Overlay -->
+                        <div class="ctrl-group">
+                            <label>Texto Overlay</label>
+                            <input type="text" id="d-overlay-text" class="ctrl-input" placeholder="Escribe un texto...">
+                        </div>
+                        <div class="ctrl-group">
+                            <label class="ctrl-check">
+                                <input type="checkbox" id="d-overlay-timestamp">
+                                Mostrar fecha/hora
+                            </label>
+                        </div>
+                        <div class="ctrl-group">
+                            <label class="ctrl-check">
+                                <input type="checkbox" id="d-chroma-key">
+                                Chroma Key (green screen)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OBS Integration -->
+                <div class="ctrl-panel" id="obs-panel">
+                    <div class="ctrl-header">
+                        <h3>🎬 OBS Studio</h3>
+                    </div>
+                    <div class="ctrl-body">
+                        <p class="obs-desc">Usa esta URL como <strong>Browser Source</strong> en OBS Studio para obtener video limpio sin UI:</p>
+                        <div class="obs-url-box">
+                            <code id="obs-url">--</code>
+                            <button id="btn-copy-obs" class="copy-btn" title="Copiar URL OBS">📋</button>
+                        </div>
+                        <div class="obs-steps">
+                            <p><strong>Pasos:</strong></p>
+                            <ol>
+                                <li>En OBS → Fuentes → <strong>+</strong> → <strong>Navegador</strong></li>
+                                <li>Pega la URL de arriba</li>
+                                <li>Ancho: <strong>1920</strong>, Alto: <strong>1080</strong></li>
+                                <li>Activa <strong>"Iniciar cámara virtual"</strong> en OBS</li>
+                                <li>¡Listo! Tu teléfono ahora es webcam 🎉</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/constants.js"></script>
+    <script src="/shared/webrtc.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PhoneCam Pro">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a1a">
+    <link rel="apple-touch-icon" href="/assets/icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <title>PhoneCam Pro — Cámara</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Connection Screen -->
+    <div id="connect-screen" class="screen active">
+        <!-- Mode: QR Scanner Viewfinder -->
+        <div id="scanner-container" class="scanner-view">
+            <video id="scanner-video" autoplay playsinline muted></video>
+            <canvas id="scanner-canvas" style="display:none;"></canvas>
+
+            <div class="scanner-overlay">
+                <div class="scanner-header">
+                    <div class="app-badge">📸 PhoneCam <span class="pro">Pro</span></div>
+                    <p class="scan-hint">Apunta con tu iPhone al código QR de la pantalla del PC</p>
+                </div>
+
+                <div class="viewfinder-box">
+                    <div class="viewfinder-corner top-left"></div>
+                    <div class="viewfinder-corner top-right"></div>
+                    <div class="viewfinder-corner bottom-left"></div>
+                    <div class="viewfinder-corner bottom-right"></div>
+                    <div class="scanner-laser"></div>
+                </div>
+
+                <div class="scanner-footer">
+                    <button id="btn-toggle-manual" class="btn-glass">
+                        <span>⌨️</span> Ingresar código manual
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mode: Manual Code Input -->
+        <div id="manual-container" class="connect-container" style="display:none;">
+            <div class="app-icon">📸</div>
+            <h1>PhoneCam <span class="pro">Pro</span></h1>
+            <p class="subtitle">Conecta tu iPhone al PC</p>
+
+            <div class="input-group">
+                <label for="room-input">Código de Sala (6 letras)</label>
+                <input type="text" id="room-input" placeholder="Ej: ABC123" maxlength="6" autocomplete="off" spellcheck="false">
+            </div>
+
+            <button id="connect-btn" class="btn-primary">
+                <span class="btn-icon">🔗</span> Conectar
+            </button>
+
+            <button id="btn-back-scanner" class="btn-secondary-link">
+                <span>📷</span> Volver a escanear QR
+            </button>
+
+            <div id="connect-status" class="status-msg"></div>
+        </div>
+    </div>
+
+    <!-- Camera Streaming Screen -->
+    <div id="camera-screen" class="screen">
+        <!-- Video Preview -->
+        <div id="video-container">
+            <video id="local-video" autoplay playsinline muted></video>
+            <canvas id="filter-canvas" style="display:none;"></canvas>
+
+            <!-- Status Overlay -->
+            <div id="status-bar">
+                <div class="status-left">
+                    <span id="connection-indicator" class="indicator disconnected"></span>
+                    <span id="connection-label">Desconectado</span>
+                </div>
+                <div class="status-right">
+                    <span id="battery-icon">🔋</span>
+                    <span id="battery-level">--</span>
+                    <span id="resolution-label">--</span>
+                </div>
+            </div>
+
+            <!-- Stats Overlay -->
+            <div id="stats-overlay" class="hidden">
+                <div class="stat-row"><span>Resolución</span><span id="stat-resolution">--</span></div>
+                <div class="stat-row"><span>FPS</span><span id="stat-fps">--</span></div>
+                <div class="stat-row"><span>Bitrate</span><span id="stat-bitrate">--</span></div>
+                <div class="stat-row"><span>Latencia</span><span id="stat-latency">--</span></div>
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div id="controls-bar">
+            <div class="quick-actions">
+                <button id="btn-switch-camera" class="ctrl-btn" title="Cambiar cámara">
+                    <span>🔄</span>
+                    <small>Cámara</small>
+                </button>
+                <button id="btn-flash" class="ctrl-btn" title="Flash">
+                    <span id="flash-icon">⚡</span>
+                    <small>Flash</small>
+                </button>
+                <button id="btn-mic" class="ctrl-btn active" title="Micrófono">
+                    <span id="mic-icon">🎤</span>
+                    <small>Mic</small>
+                </button>
+                <button id="btn-stats" class="ctrl-btn" title="Estadísticas">
+                    <span>📊</span>
+                    <small>Stats</small>
+                </button>
+                <button id="btn-settings" class="ctrl-btn" title="Ajustes">
+                    <span>⚙️</span>
+                    <small>Ajustes</small>
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="panel hidden">
+            <div class="panel-header">
+                <h3>Ajustes de Cámara</h3>
+                <button id="btn-close-settings" class="close-btn">✕</button>
+            </div>
+            <div class="panel-body">
+                <!-- Resolution -->
+                <div class="setting-group">
+                    <label>Resolución</label>
+                    <div class="toggle-group" id="resolution-group">
+                        <button data-value="480p" class="toggle-btn">480p</button>
+                        <button data-value="720p" class="toggle-btn">720p</button>
+                        <button data-value="1080p" class="toggle-btn active">1080p</button>
+                        <button data-value="4k" class="toggle-btn">4K</button>
+                    </div>
+                </div>
+
+                <!-- FPS -->
+                <div class="setting-group">
+                    <label>FPS</label>
+                    <div class="toggle-group" id="fps-group">
+                        <button data-value="15" class="toggle-btn">15</button>
+                        <button data-value="30" class="toggle-btn">30</button>
+                        <button data-value="60" class="toggle-btn active">60</button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="setting-group">
+                    <label>Filtro</label>
+                    <div class="filter-grid" id="filter-group">
+                        <button data-value="none" class="filter-btn active">Normal</button>
+                        <button data-value="grayscale" class="filter-btn">B&N</button>
+                        <button data-value="sepia" class="filter-btn">Sepia</button>
+                        <button data-value="vintage" class="filter-btn">Vintage</button>
+                        <button data-value="contrast" class="filter-btn">Contraste</button>
+                        <button data-value="invert" class="filter-btn">Negativo</button>
+                        <button data-value="warm" class="filter-btn">Cálido</button>
+                        <button data-value="cool" class="filter-btn">Frío</button>
+                        <button data-value="saturate" class="filter-btn">Saturado</button>
+                    </div>
+                </div>
+
+                <!-- Zoom -->
+                <div class="setting-group" id="zoom-group" style="display:none;">
+                    <label>Zoom: <span id="zoom-value">1.0x</span></label>
+                    <input type="range" id="zoom-slider" min="1" max="10" step="0.1" value="1">
+                </div>
+
+                <!-- Exposure -->
+                <div class="setting-group" id="exposure-group" style="display:none;">
+                    <label>Exposición: <span id="exposure-value">0</span></label>
+                    <input type="range" id="exposure-slider" min="-3" max="3" step="0.1" value="0">
+                </div>
+
+                <!-- Brightness -->
+                <div class="setting-group">
+                    <label>Brillo: <span id="brightness-value">100%</span></label>
+                    <input type="range" id="brightness-slider" min="50" max="200" step="1" value="100">
+                </div>
+
+                <!-- Contrast -->
+                <div class="setting-group">
+                    <label>Contraste: <span id="contrast-value">100%</span></label>
+                    <input type="range" id="contrast-slider" min="50" max="200" step="1" value="100">
+                </div>
+
+                <!-- Saturation -->
+                <div class="setting-group">
+                    <label>Saturación: <span id="saturation-value">100%</span></label>
+                    <input type="range" id="saturation-slider" min="0" max="300" step="1" value="100">
+                </div>
+
+                <!-- Orientation (Camo-style lock) -->
+                <div class="setting-group">
+                    <label>Orientación</label>
+                    <div class="toggle-group" id="orientation-group">
+                        <button data-value="auto" class="toggle-btn active">Auto</button>
+                        <button data-value="portrait" class="toggle-btn">Vertical</button>
+                        <button data-value="landscape" class="toggle-btn">Horizontal</button>
+                    </div>
+                </div>
+
+                <!-- Mic Gain -->
+                <div class="setting-group">
+                    <label>Ganancia Mic: <span id="gain-value">100%</span></label>
+                    <input type="range" id="gain-slider" min="0" max="300" step="1" value="100">
+                </div>
+
+                <!-- Black screen mode -->
+                <div class="setting-group">
+                    <button id="btn-blackout" class="btn-danger">🌙 Pantalla negra (sigue transmitiendo)</button>
+                </div>
+
+                <!-- Disconnect -->
+                <div class="setting-group">
+                    <button id="btn-disconnect" class="btn-danger">Desconectar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio feedback on QR scan -->
+    <audio id="beep-sound" preload="auto" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"></audio>
+
+    <!-- Black screen mode overlay (Camo-style screen off) -->
+    <div id="blackout-overlay" style="display:none;">
+        <span id="blackout-tap">Toque para reactivar</span>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/constants.js"></script>
+    <script src="/shared/jsQR.js"></script>
+    <script src="/shared/webrtc.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "PhoneCam Pro",
+  "short_name": "PhoneCam",
+  "description": "Convierte tu teléfono en una webcam HD profesional",
+  "start_url": "/mobile/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0a0a1a",
+  "icons": [
+    {
+      "src": "/assets/icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>PhoneCam Pro</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            background: #0a0a1a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            padding-top: calc(24px + env(safe-area-inset-top, 0px));
+            padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .card {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 44px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+        }
+
+        h1 span {
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+
+        label {
+            display: block;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+            margin-bottom: 20px;
+            transition: border 0.2s;
+        }
+
+        input:focus {
+            border-color: #3b82f6;
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .hint {
+            margin-top: 24px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.35);
+            line-height: 1.6;
+        }
+
+        .hint code {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        #status {
+            margin-top: 16px;
+            font-size: 13px;
+            min-height: 18px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        #status.error { color: #f87171; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">📸</div>
+        <h1>PhoneCam <span>Pro</span></h1>
+        <p class="subtitle">Convierte tu iPhone en una webcam HD</p>
+
+        <label for="server-input">IP de tu PC</label>
+        <input id="server-input" type="text" placeholder="192.168.3.6" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+        <button id="connect-btn">Conectar</button>
+
+        <div id="status"></div>
+
+        <p class="hint">
+            Usa la misma dirección que ves en el panel de tu PC<br>
+            (ej. <code>192.168.3.6:3000</code>). Debe estar en la misma red WiFi.
+        </p>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            const input = document.getElementById('server-input');
+            const btn = document.getElementById('connect-btn');
+            const status = document.getElementById('status');
+
+            // Remember last server
+            const saved = localStorage.getItem('phonecam-server');
+            if (saved) {
+                input.value = saved;
+            }
+
+            function normalize(server) {
+                server = server.trim();
+                if (!server) return null;
+
+                if (!server.startsWith('http://') && !server.startsWith('https://')) {
+                    server = 'https://' + server;
+                }
+                server = server.replace(/\/+$/, '');
+                return server;
+            }
+
+            function connect() {
+                let server = normalize(input.value);
+                if (!server) {
+                    status.textContent = 'Ingresa la IP de tu PC';
+                    status.className = 'error';
+                    return;
+                }
+
+                // Add default port if missing
+                if (!/:\d+/.test(server.split('://')[1])) {
+                    server += ':3000';
+                }
+
+                status.textContent = 'Conectando...';
+                localStorage.setItem('phonecam-server', input.value.trim());
+
+                // Navigate the native WebView to the mobile app served by the PC
+                window.location.href = server + '/mobile/';
+            }
+
+            btn.addEventListener('click', connect);
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') connect();
+            });
+        })();
+    </script>
+</body>
+</html>

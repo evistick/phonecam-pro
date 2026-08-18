@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhoneCam Pro — OBS Source</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: transparent;
+        }
+
+        #status {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.5);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        #status.hidden {
+            display: none;
+        }
+
+        .spinner-obs {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: spin-obs 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin-obs {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline></video>
+    <div id="status">
+        <div class="spinner-obs"></div>
+        <p>Esperando conexión...</p>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/constants.js"></script>
+    <script src="/shared/webrtc.js"></script>
+    <script>
+        /**
+         * OBS Clean View — Minimal video-only receiver for OBS Browser Source
+         * No UI elements, transparent background, just the raw video stream
+         */
+        (function () {
+            'use strict';
+
+            const video = document.getElementById('video');
+            const status = document.getElementById('status');
+
+            // Get room from URL
+            const params = new URLSearchParams(window.location.search);
+            const roomId = params.get('room');
+
+            if (!roomId) {
+                status.innerHTML = '<p>⚠️ No room specified. Add ?room=XXXX to the URL</p>';
+                return;
+            }
+
+            // Connect
+            const socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1000
+            });
+
+            let rtc = null;
+
+            socket.on('connect', () => {
+                console.log('[OBS] Connected to server');
+                socket.emit('join-room', { room: roomId, role: 'desktop' }, (response) => {
+                    if (response.error) {
+                        status.innerHTML = '<p>⚠️ Room not found</p>';
+                        return;
+                    }
+                    setupRTC();
+                });
+            });
+
+            socket.on('peer-joined', (data) => {
+                if (data.role === 'mobile') {
+                    console.log('[OBS] Mobile peer joined');
+                }
+            });
+
+            socket.on('peer-left', () => {
+                status.classList.remove('hidden');
+                status.innerHTML = '<div class="spinner-obs"></div><p>Esperando reconexión...</p>';
+            });
+
+            socket.on('disconnect', () => {
+                status.classList.remove('hidden');
+                status.innerHTML = '<div class="spinner-obs"></div><p>Reconectando...</p>';
+            });
+
+            socket.on('reconnect', () => {
+                socket.emit('join-room', { room: roomId, role: 'desktop' }, () => {
+                    setupRTC();
+                });
+            });
+
+            // Apply filter changes from desktop
+            socket.on('filter-change', (data) => {
+                const filterDef = PHONECAM.FILTERS[data.filter];
+                if (filterDef) {
+                    video.style.filter = filterDef.css === 'none' ? '' : filterDef.css;
+                }
+            });
+
+            function setupRTC() {
+                if (rtc) rtc.close();
+
+                rtc = new PhoneCamRTC('desktop', socket, roomId);
+                rtc.createPeerConnection();
+
+                rtc.onRemoteStream = (stream) => {
+                    console.log('[OBS] Stream received');
+                    video.srcObject = stream;
+                    status.classList.add('hidden');
+                };
+
+                rtc.onConnectionStateChange = (state) => {
+                    if (state === 'connected') {
+                        status.classList.add('hidden');
+                    } else if (state === 'disconnected' || state === 'failed') {
+                        status.classList.remove('hidden');
+                        status.innerHTML = '<div class="spinner-obs"></div><p>Reconectando...</p>';
+                    }
+                };
+            }
+        })();
+    </script>
+</body>
+</html>

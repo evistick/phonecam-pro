@@ -1,0 +1,39 @@
+{
+  "name": "phonecam-pro",
+  "version": "1.0.0",
+  "description": "Turn your phone into a professional HD webcam for your PC",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "app": "electron .",
+    "server": "node server.js",
+    "generate-cert": "node generate-cert.js",
+    "generate-ca": "node generate-ca.js",
+    "cap:sync": "cap sync ios",
+    "cap:open": "cap open ios"
+  },
+  "keywords": [
+    "webcam",
+    "phone",
+    "camera",
+    "webrtc",
+    "streaming",
+    "obs"
+  ],
+  "author": "PhoneCam Pro",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^2.4.1",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "electron": "^43.4.0",
+    "typescript": "^7.0.2"
+  }
+}

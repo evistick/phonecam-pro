@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+
+# Certificates & secrets (never commit)
+certs/*.key
+certs/ca.key
+
+# Capacitor generated web assets (rebuilt by `npx cap sync ios`)
+ios/App/App/public/
+
+# iOS
+ios/App/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Electron
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local app data
+PhoneCamPro-Trust.mobileconfig
