@@ -84,6 +84,14 @@ const io = new Server(server, {
     maxHttpBufferSize: 1e8 // 100MB for large frames
 });
 
+// HTTP fallback server (for the native iPhone app: no TLS needed on LAN)
+const HTTP_PORT = parseInt(process.env.HTTP_PORT || 3001, 10);
+const httpFallbackServer = http.createServer(app);
+const ioHttp = new Server(httpFallbackServer, {
+    cors: { origin: '*' },
+    maxHttpBufferSize: 1e8
+});
+
 // ─── Static Files ──────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
@@ -113,8 +121,8 @@ app.get('/obs/', (req, res) => {
 // QR Code API
 app.get('/api/qrcode/:room', async (req, res) => {
     const room = req.params.room;
-    const protocol = server instanceof https.Server ? 'https' : 'http';
-    const url = `${protocol}://${LOCAL_IP}:${PORT}/mobile/?room=${room}`;
+    // Use the HTTP port for the QR: native app connects without TLS hassle
+    const url = `http://${LOCAL_IP}:${HTTP_PORT}/mobile/?room=${room}`;
     try {
         const qrDataUrl = await QRCode.toDataURL(url, {
             width: 300,
@@ -151,7 +159,8 @@ function generateRoomId() {
 }
 
 // ─── Socket.IO Events ──────────────────────────────────────────
-io.on('connection', (socket) => {
+function attachSocketHandlers(socketServer) {
+socketServer.on('connection', (socket) => {
     console.log(`📱 Client connected: ${socket.id}`);
     let currentRoom = null;
     let clientRole = null;
@@ -263,6 +272,10 @@ io.on('connection', (socket) => {
         }
     });
 });
+}
+
+attachSocketHandlers(io);
+attachSocketHandlers(ioHttp);
 
 // ─── Cleanup old rooms periodically ────────────────────────────
 setInterval(() => {
@@ -278,6 +291,11 @@ setInterval(() => {
 
 // ─── Start Server ──────────────────────────────────────────────
 function startServer(cb) {
+    // Always listen on the HTTP fallback port for the native app
+    httpFallbackServer.listen(HTTP_PORT, '0.0.0.0', () => {
+        console.log(`🌐 HTTP app server listening on :${HTTP_PORT}`);
+    });
+
     if (server.listening) {
         if (cb) cb();
         return server;
@@ -301,7 +319,7 @@ function startServer(cb) {
         console.log(`║  🎬 OBS:     ${protocol}://${LOCAL_IP}:${PORT}/obs/`);
         console.log('╠══════════════════════════════════════════════════╣');
         console.log(`║  🌐 Local IP: ${LOCAL_IP}`);
-        console.log(`║  🔌 Port:     ${PORT}`);
+        console.log(`║  🔌 HTTPS:   :${PORT}   HTTP (app): :${HTTP_PORT}`);
         console.log('╚══════════════════════════════════════════════════╝');
         console.log('');
         if (cb) cb();

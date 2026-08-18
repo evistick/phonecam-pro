@@ -277,7 +277,8 @@
                 if (roomParam) {
                     targetRoom = roomParam.toUpperCase();
                 }
-                targetHost = url.origin;
+                // Force plain HTTP (port 3001) for the native app: no TLS cert hassle
+                targetHost = `http://${url.hostname}:3001`;
             }
         } catch (e) {}
 
@@ -300,10 +301,10 @@
         server = server.trim();
         if (!server) return null;
         if (!server.startsWith('http://') && !server.startsWith('https://')) {
-            server = 'https://' + server;
+            server = 'http://' + server;
         }
         if (!/:\d+/.test(server.split('://')[1])) {
-            server += ':3000';
+            server += ':3001';
         }
         return server.replace(/\/+$/, '');
     }
@@ -363,6 +364,10 @@
         state.socket.on('connect_error', () => {
             showStatus('Error de conexión al servidor', 'error');
             connectBtn.disabled = false;
+            // Back to the scanner so the user can retry
+            manualContainer.style.display = 'none';
+            scannerContainer.style.display = 'flex';
+            startQRScanner();
         });
 
         state.socket.on('disconnect', () => {
@@ -900,6 +905,12 @@
     function showStatus(msg, type) {
         connectStatus.textContent = msg;
         connectStatus.className = 'status-msg ' + (type || '');
+        // Also show on the scanner screen so the user gets feedback
+        const scannerStatus = document.getElementById('scanner-status');
+        if (scannerStatus) {
+            scannerStatus.textContent = msg;
+            scannerStatus.className = 'status-msg ' + (type || '');
+        }
     }
 
     function disconnect() {
