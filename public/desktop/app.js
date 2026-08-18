@@ -174,6 +174,165 @@
         };
     }
 
+    // ─── OBS Virtual Camera (automatic) ────────────────────
+    // Uses the OBS WebSocket API (v5, port 4455) to create a Browser Source
+    // with the clean video URL and start the Virtual Camera, which appears
+    // as a video input device ("OBS Virtual Camera") in Teams, Zoom, etc.
+    const OBS_WS_URL = 'ws://127.0.0.1:4455';
+    const OBS_INPUT_NAME = 'PhoneCam Pro Webcam';
+    let obsSocket = null;
+    let obsRequestId = 0;
+    let obsPending = new Map();
+    let obsIdentified = false;
+
+    function obsStatus(msg, type) {
+        const el = $('#obs-status');
+        if (el) {
+            el.textContent = msg;
+            el.className = 'obs-status ' + (type || '');
+        }
+    }
+
+    function obsRequest(requestType, requestData) {
+        return new Promise((resolve, reject) => {
+            if (!obsSocket || obsSocket.readyState !== WebSocket.OPEN) {
+                reject(new Error('OBS WebSocket no conectado'));
+                return;
+            }
+            const id = String(++obsRequestId);
+            obsPending.set(id, { resolve, reject });
+            obsSocket.send(JSON.stringify({
+                op: 6, // Request
+                d: {
+                    requestType,
+                    requestId: id,
+                    requestData: requestData || {}
+                }
+            }));
+        });
+    }
+
+    function connectOBS() {
+        return new Promise((resolve, reject) => {
+            obsSocket = new WebSocket(OBS_WS_URL);
+
+            obsSocket.onopen = () => {
+                obsSocket.send(JSON.stringify({
+                    op: 1, // Identify
+                    d: { rpcVersion: 1 }
+                }));
+            };
+
+            obsSocket.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.op === 2) { // Hello
+                    // Wait for identify; server replies with Identified (op 2 response?)
+                }
+                if (msg.op === 7) { // RequestResponse
+                    const d = msg.d;
+                    const pending = obsPending.get(d.requestId);
+                    if (pending) {
+                        obsPending.delete(d.requestId);
+                        if (d.requestStatus && d.requestStatus.result === false) {
+                            pending.reject(new Error(d.requestStatus.comment || d.requestType + ' falló'));
+                        } else {
+                            pending.resolve(d.responseData || {});
+                        }
+                    }
+                }
+                if (msg.op === 2 && msg.d && msg.d.negotiatedRpcVersion !== undefined) {
+                    obsIdentified = true;
+                    resolve();
+                }
+            };
+
+            obsSocket.onerror = () => {
+                reject(new Error('No se pudo conectar a OBS (ws://127.0.0.1:4455)'));
+            };
+
+            obsSocket.onclose = () => {
+                obsIdentified = false;
+                obsPending.forEach(p => p.reject(new Error('OBS desconectado')));
+                obsPending.clear();
+            };
+        });
+    }
+
+    async function startOBSVirtualCamera() {
+        const btn = $('#btn-obs-virtual');
+        btn.disabled = true;
+
+        try {
+            obsStatus('Conectando con OBS en el puerto 4455...', 'working');
+            await connectOBS();
+            obsStatus('Conectado. Creando fuente de video...', 'working');
+
+            const urlText = obsUrl.textContent;
+            if (!urlText || urlText === '--') {
+                throw new Error('Primero crea la sala (código QR)');
+            }
+
+            // Find the current scene name (don't assume "Escena")
+            const sceneInfo = await obsRequest('GetCurrentProgramScene', {});
+            const sceneName = (sceneInfo && sceneInfo.currentProgramSceneName) || 'Escena';
+
+            // Try to create the Browser Source (fails if it already exists)
+            try {
+                await obsRequest('CreateInput', {
+                    sceneName,
+                    inputName: OBS_INPUT_NAME,
+                    inputKind: 'browser_source',
+                    inputSettings: {
+                        url: urlText,
+                        width: 1920,
+                        height: 1080,
+                        fps: 60,
+                        shutdown: false,
+                        reroute_audio: false,
+                        controls: false
+                    }
+                });
+            } catch (e) {
+                // Input may already exist — update its settings instead
+                await obsRequest('SetInputSettings', {
+                    inputName: OBS_INPUT_NAME,
+                    inputSettings: {
+                        url: urlText,
+                        width: 1920,
+                        height: 1080,
+                        fps: 60,
+                        shutdown: false,
+                        reroute_audio: false,
+                        controls: false
+                    }
+                });
+            }
+
+            // Start the virtual camera output
+            try {
+                await obsRequest('StartVirtualCam');
+            } catch (e) {
+                // Might already be running — check status
+                const status = await obsRequest('GetVirtualCamStatus');
+                if (!status.outputActive) {
+                    throw e;
+                }
+            }
+
+            obsStatus('✅ Cámara virtual ACTIVA. Selecciona "OBS Virtual Camera" en Teams/Zoom/Meet.', 'success');
+            showToast('🎥 Cámara virtual iniciada en OBS', 'success');
+        } catch (err) {
+            console.error('OBS error:', err);
+            obsStatus(
+                '❌ ' + err.message + ' — ¿Está OBS abierto y con WebSocket activado? ' +
+                '(OBS → Tools → WebSocket Server Settings → "Enable WebSocket Server", puerto 4455)',
+                'error'
+            );
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     // ─── UI Controls ────────────────────────────────────────
     function setupUIControls() {
         // Theme toggle
@@ -196,6 +355,9 @@
             copyToClipboard(obsUrl.textContent);
             showToast('📋 URL OBS copiada', 'success');
         });
+
+        // OBS Virtual Camera (automatic)
+        $('#btn-obs-virtual').addEventListener('click', startOBSVirtualCamera);
 
         // Video controls
         $('#btn-fullscreen').addEventListener('click', toggleFullscreen);

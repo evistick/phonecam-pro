@@ -901,6 +901,50 @@ input[type="range"]::-moz-range-thumb {
     color: var(--text-primary);
 }
 
+.obs-virtual-btn {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 13px 16px;
+    border-radius: var(--radius-xs);
+    border: none;
+    background: linear-gradient(135deg, #7c3aed, #db2777);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.obs-virtual-btn:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+}
+
+.obs-virtual-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.obs-status {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 12px;
+    min-height: 34px;
+}
+
+.obs-status.success {
+    color: #4ade80;
+}
+
+.obs-status.error {
+    color: #f87171;
+}
+
+.obs-status.working {
+    color: var(--accent-light);
+}
+
 /* ─── Animations ────────────────────────────────────── */
 
 @keyframes fade-in-up {

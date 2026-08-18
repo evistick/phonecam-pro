@@ -261,13 +261,19 @@
                         <h3>🎬 OBS Studio</h3>
                     </div>
                     <div class="ctrl-body">
-                        <p class="obs-desc">Usa esta URL como <strong>Browser Source</strong> en OBS Studio para obtener video limpio sin UI:</p>
+                        <p class="obs-desc">Convierte tu teléfono en una <strong>cámara virtual</strong> que aparece como dispositivo en Teams, Zoom, Meet, etc.</p>
+
+                        <button id="btn-obs-virtual" class="btn-primary obs-virtual-btn">
+                            🎥 Iniciar cámara virtual automáticamente
+                        </button>
+                        <div id="obs-status" class="obs-status">OBS debe estar abierto con el servidor WebSocket activado (Tools → WebSocket Server Settings, puerto 4455)</div>
+
                         <div class="obs-url-box">
                             <code id="obs-url">--</code>
                             <button id="btn-copy-obs" class="copy-btn" title="Copiar URL OBS">📋</button>
                         </div>
                         <div class="obs-steps">
-                            <p><strong>Pasos:</strong></p>
+                            <p><strong>Manual (alternativo):</strong></p>
                             <ol>
                                 <li>En OBS → Fuentes → <strong>+</strong> → <strong>Navegador</strong></li>
                                 <li>Pega la URL de arriba</li>
