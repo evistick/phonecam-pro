@@ -160,6 +160,15 @@ function generateRoomId() {
 
 // ─── Socket.IO Events ──────────────────────────────────────────
 function attachSocketHandlers(socketServer) {
+    // Relay room events to BOTH socket servers (HTTPS desktop + HTTP app),
+    // so signaling crosses between peers connected on different instances.
+    const otherServer = socketServer === io ? ioHttp : io;
+    function relay(roomId, event, data, sender) {
+        if (!roomId) return;
+        sender.to(roomId).emit(event, data);
+        otherServer.to(roomId).emit(event, data);
+    }
+
 socketServer.on('connection', (socket) => {
     console.log(`📱 Client connected: ${socket.id}`);
     let currentRoom = null;
@@ -203,8 +212,8 @@ socketServer.on('connection', (socket) => {
 
         console.log(`📲 ${role} joined room: ${roomId}`);
 
-        // Notify the other peer
-        socket.to(roomId).emit('peer-joined', { role, id: socket.id });
+        // Notify the other peer (cross-server)
+        relay(roomId, 'peer-joined', { role, id: socket.id }, socket);
 
         if (typeof callback === 'function') {
             callback({ success: true, roomId });
@@ -213,17 +222,17 @@ socketServer.on('connection', (socket) => {
 
     // WebRTC signaling: Offer
     socket.on('offer', (data) => {
-        socket.to(data.room).emit('offer', { sdp: data.sdp, from: socket.id });
+        relay(data.room, 'offer', { sdp: data.sdp, from: socket.id }, socket);
     });
 
     // WebRTC signaling: Answer
     socket.on('answer', (data) => {
-        socket.to(data.room).emit('answer', { sdp: data.sdp, from: socket.id });
+        relay(data.room, 'answer', { sdp: data.sdp, from: socket.id }, socket);
     });
 
     // WebRTC signaling: ICE Candidate
     socket.on('ice-candidate', (data) => {
-        socket.to(data.room).emit('ice-candidate', { candidate: data.candidate, from: socket.id });
+        relay(data.room, 'ice-candidate', { candidate: data.candidate, from: socket.id }, socket);
     });
 
     // Camera control relay (desktop -> mobile)
@@ -232,13 +241,12 @@ socketServer.on('connection', (socket) => {
         'focus-change', 'wb-change', 'resolution-change', 'fps-change',
         'filter-change', 'brightness-change', 'contrast-change',
         'saturation-change', 'mic-toggle', 'mic-gain', 'orientation-change'
+
     ];
 
     controlEvents.forEach(event => {
         socket.on(event, (data) => {
-            if (currentRoom) {
-                socket.to(currentRoom).emit(event, data);
-            }
+            relay(currentRoom, event, data, socket);
         });
     });
 
@@ -249,9 +257,7 @@ socketServer.on('connection', (socket) => {
 
     statusEvents.forEach(event => {
         socket.on(event, (data) => {
-            if (currentRoom) {
-                socket.to(currentRoom).emit(event, data);
-            }
+            relay(currentRoom, event, data, socket);
         });
     });
 
@@ -259,7 +265,7 @@ socketServer.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`❌ Client disconnected: ${socket.id}`);
         if (currentRoom) {
-            socket.to(currentRoom).emit('peer-left', { role: clientRole, id: socket.id });
+            relay(currentRoom, 'peer-left', { role: clientRole, id: socket.id }, socket);
 
             // Clean up room if desktop leaves
             if (clientRole === 'desktop') {
