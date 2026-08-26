@@ -396,8 +396,11 @@ html, body {
 }
 
 #video-container {
-    flex: 1;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -551,6 +554,10 @@ html, body {
 /* ─── Controls Bar (Tab Bar Material) ───────────────── */
 
 #controls-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     background: var(--material);
     backdrop-filter: blur(30px) saturate(180%);
     -webkit-backdrop-filter: blur(30px) saturate(180%);
