@@ -67,6 +67,7 @@
                 <div id="video-panel" class="panel-card" style="display:none;">
                     <div id="video-wrapper">
                         <video id="remote-video" autoplay playsinline></video>
+                        <canvas id="face-overlay" style="display:none;"></canvas>
 
                         <!-- Video overlays -->
                         <div id="overlay-container">
@@ -182,7 +183,15 @@
                                 <button data-value="60" class="active">60</button>
                             </div>
                         </div>
+                    </div>
+                </div>
 
+                <!-- Image Controls -->
+                <div class="ctrl-panel" id="image-ctrl-panel">
+                    <div class="ctrl-header">
+                        <h3>🎨 Imagen</h3>
+                    </div>
+                    <div class="ctrl-body">
                         <!-- Orientation (Camo-style lock) -->
                         <div class="ctrl-group">
                             <label>Orientación</label>
@@ -226,6 +235,21 @@
                             <label>Saturación <span id="d-saturation-val">100%</span></label>
                             <input type="range" id="d-saturation" min="0" max="300" value="100">
                         </div>
+
+                        <!-- Skin smoothing -->
+                        <div class="ctrl-group">
+                            <label>Suavizar piel <span id="d-smooth-val">0%</span></label>
+                            <input type="range" id="d-smooth" min="0" max="100" value="0">
+                        </div>
+
+                        <!-- Face mode -->
+                        <div class="ctrl-group">
+                            <label>Modo de suavizado</label>
+                            <div class="btn-group" id="d-face-mode-group">
+                                <button data-value="frame" class="active">Todo el encuadre</button>
+                                <button data-value="face">Solo rostro 🔎</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -255,33 +279,17 @@
                     </div>
                 </div>
 
-                <!-- OBS Integration -->
-                <div class="ctrl-panel" id="obs-panel">
+                <!-- Virtual Camera -->
+                <div class="ctrl-panel" id="vcam-panel">
                     <div class="ctrl-header">
-                        <h3>🎬 OBS Studio</h3>
+                        <h3>🎥 Cámara Virtual</h3>
                     </div>
                     <div class="ctrl-body">
-                        <p class="obs-desc">Convierte tu teléfono en una <strong>cámara virtual</strong> que aparece como dispositivo en Teams, Zoom, Meet, etc.</p>
-
-                        <button id="btn-obs-virtual" class="btn-primary obs-virtual-btn">
-                            🎥 Iniciar cámara virtual automáticamente
+                        <p class="obs-desc">Tu teléfono aparece como <strong>"PhoneCam Pro"</strong> en Teams, Zoom y Meet.</p>
+                        <button id="btn-vcam" class="btn-primary obs-virtual-btn">
+                            🎥 Activar cámara virtual
                         </button>
-                        <div id="obs-status" class="obs-status">OBS debe estar abierto con el servidor WebSocket activado (Tools → WebSocket Server Settings, puerto 4455)</div>
-
-                        <div class="obs-url-box">
-                            <code id="obs-url">--</code>
-                            <button id="btn-copy-obs" class="copy-btn" title="Copiar URL OBS">📋</button>
-                        </div>
-                        <div class="obs-steps">
-                            <p><strong>Manual (alternativo):</strong></p>
-                            <ol>
-                                <li>En OBS → Fuentes → <strong>+</strong> → <strong>Navegador</strong></li>
-                                <li>Pega la URL de arriba</li>
-                                <li>Ancho: <strong>1920</strong>, Alto: <strong>1080</strong></li>
-                                <li>Activa <strong>"Iniciar cámara virtual"</strong> en OBS</li>
-                                <li>¡Listo! Tu teléfono ahora es webcam 🎉</li>
-                            </ol>
-                        </div>
+                        <div id="vcam-status" class="obs-status">Selecciona "PhoneCam Pro" en tu app de videollamada.</div>
                     </div>
                 </div>
             </aside>

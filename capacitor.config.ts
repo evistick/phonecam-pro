@@ -4,7 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.phonecam.pro',
   appName: 'PhoneCam Pro',
   webDir: 'public/native',
-  backgroundColor: '#0a0a1a',
+  backgroundColor: '#000000',
   ios: {
     contentInset: 'always',
     allowsLinkPreview: false,

@@ -97,7 +97,7 @@
 
             socket.on('connect', () => {
                 console.log('[OBS] Connected to server');
-                socket.emit('join-room', { room: roomId, role: 'desktop' }, (response) => {
+                socket.emit('join-room', { room: roomId, role: 'monitor' }, (response) => {
                     if (response.error) {
                         status.innerHTML = '<p>⚠️ Room not found</p>';
                         return;
@@ -123,7 +123,7 @@
             });
 
             socket.on('reconnect', () => {
-                socket.emit('join-room', { room: roomId, role: 'desktop' }, () => {
+                socket.emit('join-room', { room: roomId, role: 'monitor' }, () => {
                     setupRTC();
                 });
             });

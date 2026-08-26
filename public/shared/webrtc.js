@@ -4,10 +4,11 @@
  */
 
 class PhoneCamRTC {
-    constructor(role, socket, roomId) {
+    constructor(role, socket, roomId, peerId) {
         this.role = role; // 'mobile' or 'desktop'
         this.socket = socket;
         this.roomId = roomId;
+        this.peerId = peerId || null; // target peer socket id (multi-receiver)
         this.peerConnection = null;
         this.localStream = null;
         this.remoteStream = null;
@@ -19,6 +20,7 @@ class PhoneCamRTC {
         this.statsInterval = null;
         this.reconnectAttempts = 0;
         this.isConnected = false;
+        this.remotePeerId = null; // socket id of the peer we're talking to
     }
 
     /**
@@ -37,7 +39,8 @@ class PhoneCamRTC {
             if (event.candidate) {
                 this.socket.emit(PHONECAM.EVENTS.ICE_CANDIDATE, {
                     room: this.roomId,
-                    candidate: event.candidate
+                    candidate: event.candidate,
+                    to: this.peerId || this.remotePeerId || undefined
                 });
             }
         };
@@ -133,7 +136,11 @@ class PhoneCamRTC {
     setupSignaling() {
         // Receive offer
         this.socket.on(PHONECAM.EVENTS.OFFER, async (data) => {
+            // Only handle offers addressed to us (multi-receiver support)
+            if (this.peerId && data.from !== this.peerId) return;
+            if (data.to && data.to !== this.socket.id) return;
             try {
+                this.remotePeerId = data.from;
                 await this.peerConnection.setRemoteDescription(
                     new RTCSessionDescription(data.sdp)
                 );
@@ -141,7 +148,8 @@ class PhoneCamRTC {
                 await this.peerConnection.setLocalDescription(answer);
                 this.socket.emit(PHONECAM.EVENTS.ANSWER, {
                     room: this.roomId,
-                    sdp: answer
+                    sdp: answer,
+                    to: data.from
                 });
             } catch (e) {
                 console.error('Error handling offer:', e);
@@ -150,6 +158,8 @@ class PhoneCamRTC {
 
         // Receive answer
         this.socket.on(PHONECAM.EVENTS.ANSWER, async (data) => {
+            if (this.peerId && data.from !== this.peerId) return;
+            if (data.to && data.to !== this.socket.id) return;
             try {
                 await this.peerConnection.setRemoteDescription(
                     new RTCSessionDescription(data.sdp)
@@ -161,6 +171,8 @@ class PhoneCamRTC {
 
         // Receive ICE candidate
         this.socket.on(PHONECAM.EVENTS.ICE_CANDIDATE, async (data) => {
+            if (this.peerId && data.from !== this.peerId) return;
+            if (data.to && data.to !== this.socket.id) return;
             try {
                 if (data.candidate) {
                     await this.peerConnection.addIceCandidate(
@@ -203,7 +215,8 @@ class PhoneCamRTC {
 
         this.socket.emit(PHONECAM.EVENTS.OFFER, {
             room: this.roomId,
-            sdp: offer
+            sdp: offer,
+            to: this.peerId || undefined
         });
     }
 

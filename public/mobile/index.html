@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -7,12 +7,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PhoneCam Pro">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0a0a1a">
+    <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/assets/icon.png">
     <link rel="manifest" href="/manifest.json">
-    <title>PhoneCam Pro — Cámara</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <title>PhoneCam Pro â€” CÃ¡mara</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,8 +23,8 @@
 
             <div class="scanner-overlay">
                 <div class="scanner-header">
-                    <div class="app-badge">📸 PhoneCam <span class="pro">Pro</span></div>
-                    <p class="scan-hint">Apunta con tu iPhone al código QR de la pantalla del PC</p>
+                    <div class="app-badge">ðŸ“¸ PhoneCam <span class="pro">Pro</span></div>
+                    <p class="scan-hint">Apunta con tu iPhone al cÃ³digo QR de la pantalla del PC</p>
                 </div>
 
                 <div class="viewfinder-box">
@@ -39,7 +37,7 @@
 
                 <div class="scanner-footer">
                     <button id="btn-toggle-manual" class="btn-glass">
-                        <span>⌨️</span> Ingresar código manual
+                        <span>âŒ¨ï¸</span> Ingresar cÃ³digo manual
                     </button>
                 </div>
             </div>
@@ -47,21 +45,21 @@
 
         <!-- Mode: Manual Code Input -->
         <div id="manual-container" class="connect-container" style="display:none;">
-            <div class="app-icon">📸</div>
+            <div class="app-icon">ðŸ“¸</div>
             <h1>PhoneCam <span class="pro">Pro</span></h1>
             <p class="subtitle">Conecta tu iPhone al PC</p>
 
             <div class="input-group">
-                <label for="room-input">Código de Sala (6 letras)</label>
+                <label for="room-input">CÃ³digo de Sala (6 letras)</label>
                 <input type="text" id="room-input" placeholder="Ej: ABC123" maxlength="6" autocomplete="off" spellcheck="false">
             </div>
 
             <button id="connect-btn" class="btn-primary">
-                <span class="btn-icon">🔗</span> Conectar
+                <span class="btn-icon">ðŸ”—</span> Conectar
             </button>
 
             <button id="btn-back-scanner" class="btn-secondary-link">
-                <span>📷</span> Volver a escanear QR
+                <span>ðŸ“·</span> Volver a escanear QR
             </button>
 
             <div id="connect-status" class="status-msg"></div>
@@ -82,7 +80,7 @@
                     <span id="connection-label">Desconectado</span>
                 </div>
                 <div class="status-right">
-                    <span id="battery-icon">🔋</span>
+                    <span id="battery-icon">ðŸ”‹</span>
                     <span id="battery-level">--</span>
                     <span id="resolution-label">--</span>
                 </div>
@@ -90,7 +88,7 @@
 
             <!-- Stats Overlay -->
             <div id="stats-overlay" class="hidden">
-                <div class="stat-row"><span>Resolución</span><span id="stat-resolution">--</span></div>
+                <div class="stat-row"><span>ResoluciÃ³n</span><span id="stat-resolution">--</span></div>
                 <div class="stat-row"><span>FPS</span><span id="stat-fps">--</span></div>
                 <div class="stat-row"><span>Bitrate</span><span id="stat-bitrate">--</span></div>
                 <div class="stat-row"><span>Latencia</span><span id="stat-latency">--</span></div>
@@ -100,24 +98,24 @@
         <!-- Bottom Controls -->
         <div id="controls-bar">
             <div class="quick-actions">
-                <button id="btn-switch-camera" class="ctrl-btn" title="Cambiar cámara">
-                    <span>🔄</span>
-                    <small>Cámara</small>
+                <button id="btn-switch-camera" class="ctrl-btn" title="Cambiar cÃ¡mara">
+                    <span>ðŸ”„</span>
+                    <small>CÃ¡mara</small>
                 </button>
                 <button id="btn-flash" class="ctrl-btn" title="Flash">
-                    <span id="flash-icon">⚡</span>
+                    <span id="flash-icon">âš¡</span>
                     <small>Flash</small>
                 </button>
-                <button id="btn-mic" class="ctrl-btn active" title="Micrófono">
-                    <span id="mic-icon">🎤</span>
+                <button id="btn-mic" class="ctrl-btn active" title="MicrÃ³fono">
+                    <span id="mic-icon">ðŸŽ¤</span>
                     <small>Mic</small>
                 </button>
-                <button id="btn-stats" class="ctrl-btn" title="Estadísticas">
-                    <span>📊</span>
+                <button id="btn-stats" class="ctrl-btn" title="EstadÃ­sticas">
+                    <span>ðŸ“Š</span>
                     <small>Stats</small>
                 </button>
                 <button id="btn-settings" class="ctrl-btn" title="Ajustes">
-                    <span>⚙️</span>
+                    <span>âš™ï¸</span>
                     <small>Ajustes</small>
                 </button>
             </div>
@@ -126,13 +124,13 @@
         <!-- Settings Panel -->
         <div id="settings-panel" class="panel hidden">
             <div class="panel-header">
-                <h3>Ajustes de Cámara</h3>
-                <button id="btn-close-settings" class="close-btn">✕</button>
+                <h3>Ajustes de CÃ¡mara</h3>
+                <button id="btn-close-settings" class="close-btn">âœ•</button>
             </div>
             <div class="panel-body">
                 <!-- Resolution -->
                 <div class="setting-group">
-                    <label>Resolución</label>
+                    <label>ResoluciÃ³n</label>
                     <div class="toggle-group" id="resolution-group">
                         <button data-value="480p" class="toggle-btn">480p</button>
                         <button data-value="720p" class="toggle-btn">720p</button>
@@ -161,8 +159,8 @@
                         <button data-value="vintage" class="filter-btn">Vintage</button>
                         <button data-value="contrast" class="filter-btn">Contraste</button>
                         <button data-value="invert" class="filter-btn">Negativo</button>
-                        <button data-value="warm" class="filter-btn">Cálido</button>
-                        <button data-value="cool" class="filter-btn">Frío</button>
+                        <button data-value="warm" class="filter-btn">CÃ¡lido</button>
+                        <button data-value="cool" class="filter-btn">FrÃ­o</button>
                         <button data-value="saturate" class="filter-btn">Saturado</button>
                     </div>
                 </div>
@@ -175,7 +173,7 @@
 
                 <!-- Exposure -->
                 <div class="setting-group" id="exposure-group" style="display:none;">
-                    <label>Exposición: <span id="exposure-value">0</span></label>
+                    <label>ExposiciÃ³n: <span id="exposure-value">0</span></label>
                     <input type="range" id="exposure-slider" min="-3" max="3" step="0.1" value="0">
                 </div>
 
@@ -193,13 +191,13 @@
 
                 <!-- Saturation -->
                 <div class="setting-group">
-                    <label>Saturación: <span id="saturation-value">100%</span></label>
+                    <label>SaturaciÃ³n: <span id="saturation-value">100%</span></label>
                     <input type="range" id="saturation-slider" min="0" max="300" step="1" value="100">
                 </div>
 
                 <!-- Orientation (Camo-style lock) -->
                 <div class="setting-group">
-                    <label>Orientación</label>
+                    <label>OrientaciÃ³n</label>
                     <div class="toggle-group" id="orientation-group">
                         <button data-value="auto" class="toggle-btn active">Auto</button>
                         <button data-value="portrait" class="toggle-btn">Vertical</button>
@@ -215,7 +213,7 @@
 
                 <!-- Black screen mode -->
                 <div class="setting-group">
-                    <button id="btn-blackout" class="btn-danger">🌙 Pantalla negra (sigue transmitiendo)</button>
+                    <button id="btn-blackout" class="btn-danger">ðŸŒ™ Pantalla negra (sigue transmitiendo)</button>
                 </div>
 
                 <!-- Disconnect -->

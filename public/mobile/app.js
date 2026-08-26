@@ -10,12 +10,14 @@
     const state = {
         socket: null,
         rtc: null,
+        rtcs: {}, // multi-peer: peerId -> PhoneCamRTC
         roomId: null,
         serverUrl: null,
         stream: null,
         scannerStream: null,
         isScanning: false,
         scanAnimationId: null,
+        knownPeers: new Set(),
         audioContext: null,
         gainNode: null,
         facingMode: 'environment', // 'user' or 'environment'
@@ -347,17 +349,19 @@
         });
 
         state.socket.on('peer-joined', (data) => {
-            if (data.role === 'desktop') {
-                console.log('🖥️ Desktop peer joined');
+            if (data.role === 'desktop' || data.role === 'monitor') {
+                console.log('🖥️ Peer joined:', data.id);
+                state.knownPeers.add(data.id);
                 if (state.stream) {
-                    initWebRTC();
+                    addPeer(data.id);
                 }
             }
         });
 
         state.socket.on('peer-left', (data) => {
-            if (data.role === 'desktop') {
-                updateConnectionUI('disconnected');
+            if (data.role === 'desktop' || data.role === 'monitor') {
+                state.knownPeers.delete(data.id);
+                removePeer(data.id);
             }
         });
 
@@ -441,26 +445,48 @@
     }
 
     // ─── WebRTC ─────────────────────────────────────────────
-    function initWebRTC() {
-        if (state.rtc) {
-            state.rtc.close();
-        }
+    // Multiple peers supported: one PhoneCamRTC per receiver
+    // (desktop panel + OBS browser source can be connected at once)
+    function addPeer(peerId) {
+        if (state.rtcs[peerId]) return;
 
-        state.rtc = new PhoneCamRTC('mobile', state.socket, state.roomId);
-        state.rtc.createPeerConnection();
+        const rtc = new PhoneCamRTC('mobile', state.socket, state.roomId, peerId);
+        rtc.createPeerConnection();
 
-        state.rtc.onConnectionStateChange = (connState) => {
+        rtc.onConnectionStateChange = (connState) => {
             updateConnectionUI(connState);
         };
 
-        state.rtc.onStats = (stats) => {
+        rtc.onStats = (stats) => {
             updateStatsUI(stats);
             if (state.socket) {
                 state.socket.emit('stats-update', stats);
             }
         };
 
-        state.rtc.addStreamAndOffer(state.stream);
+        state.rtcs[peerId] = rtc;
+        rtc.addStreamAndOffer(state.stream);
+    }
+
+    function removePeer(peerId) {
+        const rtc = state.rtcs[peerId];
+        if (rtc) {
+            rtc.close();
+            delete state.rtcs[peerId];
+        }
+        if (Object.keys(state.rtcs).length === 0) {
+            updateConnectionUI('disconnected');
+        }
+    }
+
+    function initWebRTC() {
+        if (!state.stream) return;
+        // Ensure we have a peer connection for every known peer
+        if (state.knownPeers.size > 0) {
+            state.knownPeers.forEach(peerId => addPeer(peerId));
+        } else if (Object.keys(state.rtcs).length === 0) {
+            addPeer(null);
+        }
     }
 
     // ─── Audio Processing ───────────────────────────────────
@@ -512,11 +538,13 @@
             detectCapabilities();
             setupAudioProcessing();
 
-            if (state.rtc && state.rtc.peerConnection) {
-                const videoTrack = state.stream.getVideoTracks()[0];
-                const audioTrack = state.stream.getAudioTracks()[0];
-                await state.rtc.replaceVideoTrack(videoTrack);
-                if (audioTrack) await state.rtc.replaceAudioTrack(audioTrack);
+            for (const rtc of Object.values(state.rtcs)) {
+                if (rtc && rtc.peerConnection) {
+                    const videoTrack = state.stream.getVideoTracks()[0];
+                    const audioTrack = state.stream.getAudioTracks()[0];
+                    await rtc.replaceVideoTrack(videoTrack);
+                    if (audioTrack) await rtc.replaceAudioTrack(audioTrack);
+                }
             }
 
             const settings = state.stream.getVideoTracks()[0].getSettings();
@@ -863,13 +891,13 @@
     }
 
     function disconnect() {
-        if (state.rtc) state.rtc.close();
+        Object.values(state.rtcs).forEach(rtc => rtc.close());
         if (state.socket) state.socket.disconnect();
         if (state.stream) state.stream.getTracks().forEach(t => t.stop());
         if (state.audioContext) state.audioContext.close();
 
         state.stream = null;
-        state.rtc = null;
+        state.rtcs = {};
         state.socket = null;
 
         cameraScreen.classList.remove('active');

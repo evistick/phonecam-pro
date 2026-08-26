@@ -10,6 +10,8 @@ const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
+const { spawn } = require('child_process');
 const QRCode = require('qrcode');
 
 const app = express();
@@ -142,8 +144,89 @@ app.get('/api/info', (req, res) => {
         ip: LOCAL_IP,
         port: PORT,
         protocol,
-        version: '1.0.0'
+        httpPort: HTTP_PORT,
+        version: '1.1.0'
     });
+});
+
+// ─── Virtual Camera (PhoneCam Pro DirectShow filter) ─────────
+// Feeds the "PhoneCam Pro" virtual camera (obs-virtualsource.dll)
+// through the OBSVirtualCamVideo shared-memory queue. The vcam-feed
+// helper creates the queue and writes NV12 frames received on stdin.
+const VCAM_PATH = path.join(__dirname, 'vcam-feed', 'vcam-feed.exe');
+let vcam = { active: false, proc: null, w: 0, h: 0, fps: 0 };
+
+function startVcam(w, h, fps) {
+    if (vcam.active) {
+        return { ok: false, error: 'La cámara virtual ya está activa' };
+    }
+    if (!fs.existsSync(VCAM_PATH)) {
+        return { ok: false, error: 'vcam-feed.exe no encontrado' };
+    }
+    const proc = spawn(VCAM_PATH, ['--w', String(w), '--h', String(h), '--fps', String(fps)], {
+        stdio: ['pipe', 'ignore', 'pipe'],
+        windowsHide: true
+    });
+    proc.stderr.on('data', (d) => console.log('[vcam] ' + String(d).trim()));
+    proc.on('exit', (code) => {
+        console.log(`[vcam] feeder exited (${code})`);
+        if (vcam.proc === proc) {
+            vcam.active = false;
+            vcam.proc = null;
+        }
+    });
+    proc.on('error', (err) => {
+        console.error('[vcam] feeder error:', err);
+        if (vcam.proc === proc) {
+            vcam.active = false;
+            vcam.proc = null;
+        }
+    });
+    vcam = { active: true, proc, w, h, fps };
+    console.log(`[vcam] started ${w}x${h} @${fps}fps`);
+    return { ok: true };
+}
+
+function stopVcam() {
+    if (!vcam.active || !vcam.proc) {
+        vcam.active = false;
+        return;
+    }
+    const proc = vcam.proc;
+    vcam.active = false;
+    vcam.proc = null;
+    try { proc.stdin.end(); } catch { /* already closed */ }
+    // Fallback kill if the feeder doesn't exit on EOF within 2s
+    setTimeout(() => {
+        try { proc.kill(); } catch { /* already gone */ }
+    }, 2000);
+    console.log('[vcam] stopped');
+}
+
+app.post('/api/virtualcam', (req, res) => {
+    try {
+        const { w, h, fps } = req.body || {};
+        if (!w || !h || !fps) {
+            return res.status(400).json({ error: 'Faltan parámetros (w, h, fps)' });
+        }
+        const result = startVcam(w, h, fps);
+        if (!result.ok) {
+            return res.status(500).json({ error: result.error });
+        }
+        res.json({ ok: true, device: 'PhoneCam Pro', w, h, fps });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/virtualcam/stop', (req, res) => {
+    stopVcam();
+    res.json({ ok: true });
+});
+
+// Virtual camera status
+app.get('/api/virtualcam/status', (req, res) => {
+    res.json({ active: vcam.active, w: vcam.w, h: vcam.h, fps: vcam.fps, device: 'PhoneCam Pro' });
 });
 
 // ─── Room Management ───────────────────────────────────────────
@@ -165,8 +248,22 @@ function attachSocketHandlers(socketServer) {
     const otherServer = socketServer === io ? ioHttp : io;
     function relay(roomId, event, data, sender) {
         if (!roomId) return;
-        sender.to(roomId).emit(event, data);
-        otherServer.to(roomId).emit(event, data);
+        const payload = { ...data, from: sender.id };
+        if (payload.to && payload.to !== sender.id) {
+            // Targeted signaling (multi-receiver): send only to that peer
+            sender.to(payload.to).emit(event, payload);
+            otherServer.to(payload.to).emit(event, payload);
+            return;
+        }
+        sender.to(roomId).emit(event, payload);
+        otherServer.to(roomId).emit(event, payload);
+    }
+
+    function relayToRoom(roomId, event, data, sender, excludedIds) {
+        if (!roomId) return;
+        const payload = { ...data, from: sender ? sender.id : null };
+        sender.to(roomId).emit(event, payload);
+        otherServer.to(roomId).emit(event, payload);
     }
 
 socketServer.on('connection', (socket) => {
@@ -179,7 +276,7 @@ socketServer.on('connection', (socket) => {
         const roomId = generateRoomId();
         rooms.set(roomId, {
             id: roomId,
-            desktop: socket.id,
+            desktops: [socket.id],
             mobile: null,
             created: Date.now()
         });
@@ -205,15 +302,30 @@ socketServer.on('connection', (socket) => {
         }
 
         const room = rooms.get(roomId);
-        room[role] = socket.id;
+        if (role === 'desktop' || role === 'monitor') {
+            if (!room.desktops) room.desktops = [];
+            room.desktops.push(socket.id);
+        }
+        if (role === 'mobile') {
+            room.mobile = socket.id;
+        }
         currentRoom = roomId;
         clientRole = role;
         socket.join(roomId);
 
         console.log(`📲 ${role} joined room: ${roomId}`);
 
-        // Notify the other peer (cross-server)
+        // Notify the other peers (cross-server)
         relay(roomId, 'peer-joined', { role, id: socket.id }, socket);
+
+        // Notify the joiner about existing peers (multi-receiver support)
+        if (room.desktops) {
+            room.desktops.forEach(deskId => {
+                if (deskId !== socket.id) {
+                    socket.emit('peer-joined', { role: 'desktop', id: deskId });
+                }
+            });
+        }
 
         if (typeof callback === 'function') {
             callback({ success: true, roomId });
@@ -261,16 +373,51 @@ socketServer.on('connection', (socket) => {
         });
     });
 
+    // Virtual camera frame feed (desktop -> vcam-feed.exe stdin)
+    socket.on('vcam-frame', (data, cb) => {
+        if (!vcam.active || !vcam.proc) {
+            if (typeof cb === 'function') cb({ ok: false, error: 'vcam inactive' });
+            return;
+        }
+        const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        const frameSize = vcam.w * vcam.h * 1.5;
+        if (buf.length !== frameSize) {
+            if (typeof cb === 'function') cb({ ok: false, error: 'bad frame size' });
+            return;
+        }
+        // Backpressure: drop frames if the consumer can't keep up
+        let dropped = false;
+        if (vcam.proc.stdin.writableLength > frameSize * 3) {
+            dropped = true;
+        } else {
+            vcam.proc.stdin.write(buf);
+        }
+        if (typeof cb === 'function') cb({ ok: true, dropped });
+    });
+
     // Disconnect
     socket.on('disconnect', () => {
         console.log(`❌ Client disconnected: ${socket.id}`);
+        // If a mobile or desktop peer leaves, the stream is gone: stop the camera
+        if (clientRole === 'mobile' || clientRole === 'desktop') {
+            stopVcam();
+        }
         if (currentRoom) {
             relay(currentRoom, 'peer-left', { role: clientRole, id: socket.id }, socket);
 
-            // Clean up room if desktop leaves
+            // Clean up room if the main desktop leaves
             if (clientRole === 'desktop') {
+                const room = rooms.get(currentRoom);
+                if (room && room.desktops) {
+                    room.desktops = room.desktops.filter(id => id !== socket.id);
+                }
                 rooms.delete(currentRoom);
                 console.log(`🗑️  Room deleted: ${currentRoom}`);
+            } else if (clientRole === 'monitor') {
+                const room = rooms.get(currentRoom);
+                if (room && room.desktops) {
+                    room.desktops = room.desktops.filter(id => id !== socket.id);
+                }
             } else if (clientRole === 'mobile' && rooms.has(currentRoom)) {
                 const room = rooms.get(currentRoom);
                 room.mobile = null;
