@@ -396,11 +396,8 @@ html, body {
 }
 
 #video-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    flex: 1;
+    position: relative;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -554,16 +551,13 @@ html, body {
 /* ─── Controls Bar (Tab Bar Material) ───────────────── */
 
 #controls-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--material);
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-    border-top: 0.5px solid rgba(255, 255, 255, 0.15);
-    padding: 10px 8px;
-    padding-bottom: calc(10px + var(--safe-bottom));
+    background: var(--bg-elevated);
+    border-top: 0.5px solid var(--separator);
+    display: flex;
+    align-items: center;
+    padding: 8px 8px;
+    padding-bottom: calc(8px + var(--safe-bottom));
+    min-height: 64px;
     z-index: 20;
 }
 
@@ -571,6 +565,7 @@ html, body {
     display: flex;
     justify-content: space-around;
     align-items: center;
+    width: 100%;
 }
 
 .ctrl-btn {
