@@ -1440,19 +1440,39 @@ if (!state.vcamActive || !state.remoteStream) return;
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) {}
         const rect = document.getElementById('main').getBoundingClientRect();
-        if (saved) {
-            document.querySelectorAll('.win').forEach(el => {
-                if (el.id === 'connect-panel') return;
-                const r = saved[el.id];
-                if (r && r.w) {
-                    el.style.width = clampNum(r.w, 240, Math.max(240, rect.width - 16)) + 'px';
-                    if (r.h) el.style.height = r.h + 'px';
-                    else el.style.height = '';
-                }
-            });
+        document.querySelectorAll('.win').forEach(el => {
+            const r = saved && saved[el.id];
+            if (!r || !r.w) return;
+            if (el.id === 'connect-panel') {
+                el.style.width = clampNum(r.w, 320, Math.max(320, rect.width - 16)) + 'px';
+                if (r.h) el.style.height = r.h + 'px';
+                else el.style.height = '';
+            } else {
+                el.style.width = clampNum(r.w, 240, Math.max(240, rect.width - 16)) + 'px';
+                if (r.h) el.style.height = r.h + 'px';
+                else el.style.height = '';
+            }
+        });
+        const cp = document.getElementById('connect-panel');
+        const sr = saved && saved['connect-panel'];
+        if (cp && sr && sr.w) {
+            cp.style.left = clampNum(sr.x || 0, 8, Math.max(8, rect.width - cp.offsetWidth - 8)) + 'px';
+            cp.style.top = clampNum(sr.y || 0, 8, Math.max(8, rect.height - cp.offsetHeight - 8)) + 'px';
+        } else {
+            centerConnectPanel();
         }
         autoArrange();
         saveLayout();
+    }
+
+    function centerConnectPanel() {
+        const cp = document.getElementById('connect-panel');
+        if (!cp || cp.style.display === 'none') return;
+        const main = document.getElementById('main').getBoundingClientRect();
+        const w = cp.offsetWidth || 480;
+        const h = cp.offsetHeight || 420;
+        cp.style.left = Math.max(8, Math.round((main.width - w) / 2)) + 'px';
+        cp.style.top = Math.max(8, Math.round((main.height - h) / 2)) + 'px';
     }
 
     // Reactive tiling: on drop the windows auto-arrange into two columns
@@ -1513,17 +1533,70 @@ if (!state.vcamActive || !state.remoteStream) return;
                 items.push({ el, w, h: el.offsetHeight || 90 });
             }
 
-            // Stack panels in the side column, wrapping to extra columns if needed
-            let x = colX, y = pad, maxW = 0;
-            for (const it of items) {
-                if (y + it.h > rect.height - pad) {
-                    x += maxW + pad;
-                    maxW = 0;
-                    y = pad;
+            // Pack the panels into columns that always fit inside the container:
+            // one column at natural width when it fits vertically, otherwise
+            // narrower columns (min 260px after CSS min-width), but never wider
+            // than the space at hand.
+            const availH = rect.height - pad * 2;
+            const measure = (it, w) => {
+                if (it.w !== w || !it.h) {
+                    it.el.style.width = w + 'px';
+                    it.h = it.el.offsetHeight || 90;
+                    it.w = w;
                 }
-                place(it.el, x, y, it.w);
-                maxW = Math.max(maxW, it.w);
-                y += it.h + pad;
+            };
+            const colTotalW = (cols) =>
+                cols.reduce((s, col) => s + Math.max(...col.items.map(i => i.w)), 0) + (cols.length - 1) * pad;
+            const packItems = (band) => {
+                let best = null;
+                for (let c = 1; c <= items.length; c++) {
+                    const colW = clampNum(Math.floor((band - (c - 1) * pad) / c), 260, 480);
+                    for (const it of items) measure(it, colW);
+                    const colsTry = [];
+                    for (let i = 0; i < c; i++) colsTry.push({ items: [], h: 0 });
+                    let overflow = false;
+                    for (const it of items) {
+                        let k = colsTry.findIndex(col => col.h + it.h + pad <= availH);
+                        if (k === -1) { k = 0; overflow = true; }
+                        colsTry[k].items.push(it);
+                        colsTry[k].h += it.h + pad;
+                    }
+                    best = { cols: colsTry, colW };
+                    if (!overflow) return best;
+                }
+                return best;
+            };
+
+            let pack = packItems(colBand);
+            if (pack) {
+                // If several columns are needed but they don't fit horizontally,
+                // shrink the video to make room, then re-pack.
+                if (videoOn && pack.cols.length > 1 && colTotalW(pack.cols) > colBand) {
+                    const vw2 = clampNum(vw - (colTotalW(pack.cols) - colBand), 360, vw);
+                    const newBand = rect.width - pad * 2 - vw2 - pad;
+                    if (newBand > pad) {
+                        const re = packItems(newBand);
+                        if (re && colTotalW(re.cols) <= newBand) {
+                            vw = vw2;
+                            const videoRight = (parseFloat(videoEl.style.left) || pad) > (rect.width - vw) / 2;
+                            colX = videoRight ? pad : pad + vw + pad;
+                            videoEl.style.height = Math.round(clampNum(vw * 9 / 16, 120, rect.height - pad * 2)) + 'px';
+                            if (videoRight) place(videoEl, rect.width - pad - vw, pad, vw);
+                            else place(videoEl, pad, pad, vw);
+                            pack = re;
+                        }
+                    }
+                }
+                let x = colX;
+                for (const col of pack.cols) {
+                    const cw = Math.max(...col.items.map(i => i.w));
+                    let y = pad;
+                    for (const it of col.items) {
+                        place(it.el, x, y, it.w);
+                        y += it.h + pad;
+                    }
+                    x += cw + pad;
+                }
             }
         }
     }
@@ -1557,7 +1630,8 @@ if (!state.vcamActive || !state.remoteStream) return;
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
                 if (moved) {
-                    autoArrange(true);
+                    if (el.id !== 'connect-panel') autoArrange(true);
+                    document.getElementById('main').classList.remove('arranging');
                     saveLayout();
                 }
             };
@@ -1601,12 +1675,17 @@ if (!state.vcamActive || !state.remoteStream) return;
     function initWindows() {
         loadLayout();
         document.querySelectorAll('.win').forEach(el => {
-            if (el.id === 'connect-panel') return;
             bindWindowDrag(el);
             bindWindowResize(el);
         });
         window.addEventListener('resize', () => {
             autoArrange();
+            const cp = document.getElementById('connect-panel');
+            if (cp && cp.style.display !== 'none') {
+                const cr = document.getElementById('main').getBoundingClientRect();
+                cp.style.left = clampNum(parseFloat(cp.style.left) || 8, 8, Math.max(8, cr.width - cp.offsetWidth - 8)) + 'px';
+                cp.style.top = clampNum(parseFloat(cp.style.top) || 8, 8, Math.max(8, cr.height - cp.offsetHeight - 8)) + 'px';
+            }
             saveLayout();
         });
         const resetBtn = document.getElementById('btn-reset-layout');
@@ -1614,6 +1693,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
             defaultLayout();
             autoArrange();
+            centerConnectPanel();
             saveLayout();
         });
     }
