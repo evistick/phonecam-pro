@@ -1,12 +1,12 @@
-/**
- * app.js — PhoneCam Pro Desktop Client
+﻿/**
+ * app.js â€” PhoneCam Pro Desktop Client
  * Handles video reception, recording, screenshots, overlays, and OBS integration
  */
 
 (function () {
     'use strict';
 
-    // ─── State ──────────────────────────────────────────────
+    // â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const state = {
         socket: null,
         rtc: null,
@@ -34,13 +34,20 @@
         vcamW: 0,
         vcamH: 0,
         smooth: 0,
+        glow: 0,
         smoothCanvas: null,
         smoothCtx: null,
         currentFilter: 'none',
         faceMode: false,
         faceLoading: false,
         landmarker: null,
-        facePolys: null,
+        faceLms: false,
+        land: null,
+        landPrev: null,
+        landTarget: null,
+        landT0: 0,
+        landDur: 140,
+        lastHit: 0,
         detCanvas: null,
         detCtx: null,
         detTs: 0,
@@ -49,10 +56,12 @@
         smoothLayerCtx: null,
         maskCanvas: null,
         maskCtx: null,
+        maskBlur: null,
+        maskBlurCtx: null,
         previewRAF: null
     };
 
-    // ─── DOM Elements ───────────────────────────────────────
+    // â”€â”€â”€ DOM Elements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const $ = (sel) => document.querySelector(sel);
     const connectPanel = $('#connect-panel');
     const videoPanel = $('#video-panel');
@@ -66,7 +75,7 @@
     const recordingIndicator = $('#recording-indicator');
     const recTimer = $('#rec-timer');
 
-    // ─── Initialize ─────────────────────────────────────────
+    // â”€â”€â”€ Initialize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function init() {
         // Connect to server
         state.socket = io({
@@ -77,7 +86,7 @@
         });
 
         state.socket.on('connect', () => {
-            console.log('🔌 Connected to server');
+            console.log('ðŸ”Œ Connected to server');
             createRoom();
         });
 
@@ -88,21 +97,21 @@
         // Peer events
         state.socket.on('peer-joined', (data) => {
             if (data.role === 'mobile') {
-                console.log('📱 Mobile peer joined');
+                console.log('ðŸ“± Mobile peer joined');
                 updateConnectionBadge('connecting');
-                showToast('📱 Teléfono conectado, iniciando stream...', 'success');
+                showToast('ðŸ“± TelÃ©fono conectado, iniciando stream...', 'success');
             }
         });
 
         state.socket.on('peer-left', (data) => {
             if (data.role === 'mobile') {
-                console.log('📱 Mobile peer left');
+                console.log('ðŸ“± Mobile peer left');
                 updateConnectionBadge('disconnected');
                 showVideoPanel(false);
                 if (state.vcamActive) {
                     stopVirtualCamera(false);
                 }
-                showToast('📱 Teléfono desconectado', 'error');
+                showToast('ðŸ“± TelÃ©fono desconectado', 'error');
             }
         });
 
@@ -134,12 +143,12 @@
         setTheme(savedTheme);
     }
 
-    // ─── Room Management ────────────────────────────────────
+    // â”€â”€â”€ Room Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function createRoom() {
         state.socket.emit('create-room', async (response) => {
             state.roomId = response.roomId;
             roomCode.textContent = response.roomId;
-            console.log('🏠 Room created:', response.roomId);
+            console.log('ðŸ  Room created:', response.roomId);
 
             // Fetch QR code
             try {
@@ -160,7 +169,7 @@
         });
     }
 
-    // ─── WebRTC ─────────────────────────────────────────────
+    // â”€â”€â”€ WebRTC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function setupWebRTC() {
         // Clean previous connection
         if (state.rtc) {
@@ -173,7 +182,7 @@
         state.rtc.createPeerConnection();
 
         state.rtc.onRemoteStream = (stream) => {
-            console.log('📺 Remote stream received');
+            console.log('ðŸ“º Remote stream received');
             state.remoteStream = stream;
             remoteVideo.srcObject = stream;
             showVideoPanel(true);
@@ -195,11 +204,11 @@
         };
     }
 
-    // ─── Virtual Camera (PhoneCam Pro device) ────────────────
+    // â”€â”€â”€ Virtual Camera (PhoneCam Pro device) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // The desktop captures the remote stream, converts RGBA -> NV12
     // and feeds it to the server, which writes it to the DirectShow
     // filter's shared-memory queue. The device then appears as
-    // "PhoneCam Pro" in Teams, Zoom, Meet, etc. — just like Camo.
+    // "PhoneCam Pro" in Teams, Zoom, Meet, etc. â€” just like Camo.
     const VCAM_MAX_W = 1280;
     const VCAM_MAX_H = 720;
     const VCAM_FPS = 30;
@@ -255,7 +264,7 @@
             return;
         }
         if (!state.remoteStream || !remoteVideo.videoWidth) {
-            showToast('📱 Conecta tu teléfono primero', 'error');
+            showToast('ðŸ“± Conecta tu telÃ©fono primero', 'error');
             return;
         }
 
@@ -269,7 +278,7 @@
             const w = Math.max(2, Math.round((srcW * scale) / 2) * 2);
             const h = Math.max(2, Math.round((srcH * scale) / 2) * 2);
 
-            vcamStatus('Preparando cámara virtual...', 'working');
+            vcamStatus('Preparando cÃ¡mara virtual...', 'working');
 
             const res = await fetch('/api/virtualcam', {
                 method: 'POST',
@@ -278,7 +287,7 @@
             });
             const data = await res.json();
             if (!res.ok || !data.ok) {
-                throw new Error(data.error || 'Error al iniciar la cámara virtual');
+                throw new Error(data.error || 'Error al iniciar la cÃ¡mara virtual');
             }
 
             state.vcamActive = true;
@@ -297,19 +306,15 @@
             state.vcamTimer = setInterval(() => {
                 if (!state.vcamActive || !state.remoteStream) return;
                 state.vcamCtx.drawImage(remoteVideo, 0, 0, w, h);
-                if (state.faceMode && state.smooth > 0) {
-                    if (performance.now() - state.lastDet >= 150) {
-                        state.lastDet = performance.now();
-                        detectFaces(state.vcamCanvas);
-                    }
-                    if (state.facePolys && state.facePolys.length) {
-                        buildSmoothLayer(state.vcamCanvas, w, h);
-                        state.vcamCtx.save();
-                        state.vcamCtx.globalAlpha = smoothAlpha();
-                        state.vcamCtx.drawImage(state.smoothLayer, 0, 0);
-                        state.vcamCtx.restore();
-                    }
-                } else {
+if (state.faceMode && state.smooth > 0) {
+                        if (performance.now() - state.lastDet >= 120) {
+                            state.lastDet = performance.now();
+                            detectFaces(state.vcamCanvas);
+                        }
+                        if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
+                            paintSmooth(state.vcamCtx);
+                        }
+                    } else {
                     smoothSkin(state.vcamCtx, w, h);
                 }
                 const img = state.vcamCtx.getImageData(0, 0, w, h);
@@ -321,16 +326,16 @@
                 });
             }, interval);
 
-            btn.innerHTML = '⏹️ Detener cámara virtual';
+            btn.innerHTML = 'â¹ï¸ Detener cÃ¡mara virtual';
             btn.classList.add('active');
             vcamStatus(
-                '✅ Cámara virtual activa (' + w + 'x' + h + '). Selecciona "PhoneCam Pro" en Teams/Zoom/Meet.',
+                'âœ… CÃ¡mara virtual activa (' + w + 'x' + h + '). Selecciona "PhoneCam Pro" en Teams/Zoom/Meet.',
                 'success'
             );
-            showToast('🎥 Cámara virtual iniciada', 'success');
+            showToast('ðŸŽ¥ CÃ¡mara virtual iniciada', 'success');
         } catch (err) {
             console.error('Virtual camera error:', err);
-            vcamStatus('❌ ' + err.message, 'error');
+            vcamStatus('âŒ ' + err.message, 'error');
         } finally {
             btn.disabled = false;
         }
@@ -346,16 +351,16 @@
 
         const btn = $('#btn-vcam');
         if (btn) {
-            btn.innerHTML = '🎥 Activar cámara virtual';
+            btn.innerHTML = 'ðŸŽ¥ Activar cÃ¡mara virtual';
             btn.classList.remove('active');
         }
-        vcamStatus('Cámara virtual detenida. Selecciona "PhoneCam Pro" en tu app de videollamada.', '');
+        vcamStatus('CÃ¡mara virtual detenida. Selecciona "PhoneCam Pro" en tu app de videollamada.', '');
         if (showMsg) {
-            showToast('⏹️ Cámara virtual detenida', 'error');
+            showToast('â¹ï¸ CÃ¡mara virtual detenida', 'error');
         }
     }
 
-    // ─── Skin Smoothing ─────────────────────────────────────
+    // â”€â”€â”€ Skin Smoothing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function smoothAlpha() {
         return 0.25 + (state.smooth / 100) * 0.5;
     }
@@ -365,7 +370,8 @@
         let css = def && def.css !== 'none' ? def.css : '';
         if (state.smooth > 0 && !state.faceMode) {
             const s = state.smooth / 100;
-            css += (css ? ' ' : '') + 'blur(' + (s * 2).toFixed(2) + 'px) brightness(' + (1 + s * 0.05).toFixed(3) + ')';
+            const g = state.glow / 100;
+            css += (css ? ' ' : '') + 'blur(' + (s * 2).toFixed(2) + 'px) brightness(' + (1 + s * 0.05 + g * 0.12).toFixed(3) + ')';
         }
         remoteVideo.style.filter = css;
     }
@@ -383,22 +389,31 @@
             state.smoothCanvas.height = sh;
         }
         const sctx = state.smoothCtx;
-        sctx.filter = 'blur(' + Math.max(1, Math.round(w / 640)) + 'px)';
+        sctx.filter = 'blur(' + Math.max(1, Math.round(w / 800)) + 'px)';
         sctx.drawImage(ctx.canvas, 0, 0, sw, sh);
         sctx.filter = 'none';
         ctx.save();
         ctx.globalAlpha = 0.25 + (state.smooth / 100) * 0.5;
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(state.smoothCanvas, 0, 0, w, h);
+        ctx.globalAlpha = 1;
+        if (state.glow > 0) {
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.06 + (state.glow / 100) * 0.13;
+            ctx.drawImage(state.smoothCanvas, 0, 0, w, h);
+        }
+        ctx.globalCompositeOperation = 'soft-light';
+        ctx.globalAlpha = 0.05;
+        ctx.drawImage(state.smoothCanvas, 0, 0, w, h);
         ctx.restore();
     }
 
-    // ─── Face-Aware Smoothing ───────────────────────────────
+    // â”€â”€â”€ Face-Aware Smoothing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function ensureFaceDetector() {
         if (state.landmarker) return true;
         if (state.faceLoading) return false;
         state.faceLoading = true;
-        showToast('⏳ Cargando detector facial…', '');
+        showToast('â³ Cargando detector facialâ€¦', '');
         try {
             const vision = await import('./vendor/mediapipe/vision_bundle.mjs');
             const files = await vision.FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');
@@ -410,11 +425,11 @@
                 runningMode: 'VIDEO',
                 numFaces: 2
             });
-            showToast('✅ Detector facial listo', 'success');
+            showToast('âœ… Detector facial listo', 'success');
             return true;
         } catch (err) {
             console.error('Face detector load failed:', err);
-            showToast('❌ No se pudo cargar el detector facial', 'error');
+            showToast('âŒ No se pudo cargar el detector facial', 'error');
             document.querySelectorAll('#d-face-mode-group button').forEach(b => {
                 b.classList.toggle('active', b.dataset.value === 'frame');
             });
@@ -449,7 +464,7 @@
         const w = source.videoWidth || source.width;
         const h = source.videoHeight || source.height;
         if (!state.landmarker || !w || !h) return;
-        const dw = 320;
+        const dw = 288;
         const dh = Math.max(36, Math.round(dw * h / w));
         if (!state.detCanvas) {
             state.detCanvas = document.createElement('canvas');
@@ -462,15 +477,142 @@
         state.detCtx.drawImage(source, 0, 0, dw, dh);
         try {
             const res = state.landmarker.detectForVideo(state.detCanvas, state.detTs += 33);
-            state.facePolys = res.faceLandmarks.map(lms =>
-                convexHull(lms.map(p => [p.x, p.y]))
-            );
+            const arr = res.faceLandmarks || [];
+            if (arr.length) {
+                const target = arr.map(lms => lms.map(p => ({ x: p.x, y: p.y })));
+                state.landPrev = state.land || target;
+                state.landTarget = target;
+                state.land = null;
+                state.lastHit = performance.now();
+                state.landT0 = state.lastHit;
+                state.faceLms = true;
+            }
         } catch (err) {
             console.warn('detectForVideo error:', err);
         }
     }
 
+    function getLands() {
+        const now = performance.now();
+        if (!state.landTarget) return null;
+        if (now - state.lastHit > 400) {
+            state.landTarget = null;
+            state.landPrev = null;
+            state.land = null;
+            state.faceLms = false;
+            return null;
+        }
+        const prog = Math.min(1, (now - state.landT0) / state.landDur);
+        const ease = 1 - Math.pow(1 - prog, 3);
+        const t = state.landTarget, p = state.landPrev || t;
+        const out = t.map((face, fi) => {
+            const pf = p[fi] || face;
+            return face.map((pt, i) => {
+                const pp = pf[i] || pt;
+                return { x: pp.x + (pt.x - pp.x) * ease, y: pp.y + (pt.y - pp.y) * ease };
+            });
+        });
+        state.land = out;
+        return out;
+    }
+
+    // Canonical MediaPipe Face Mesh index groups (468-pt topology)
+    const FACE_HOLES = [
+        { idxs: [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246], margin: 1.7 },
+        { idxs: [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398], margin: 1.7 },
+        { idxs: [70, 63, 105, 66, 107, 55, 65, 52, 53, 46], margin: 1.45 },
+        { idxs: [300, 293, 334, 296, 336, 285, 295, 282, 283, 276], margin: 1.45 },
+        { idxs: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 42, 183, 78], margin: 1.4 },
+        { idxs: [1, 2, 98, 327, 4, 5, 197, 195, 168], margin: 1.75 }
+    ];
+
+    function expandPoly(pts, f) {
+        let cx = 0, cy = 0;
+        for (const p of pts) { cx += p[0]; cy += p[1]; }
+        cx /= pts.length; cy /= pts.length;
+        return pts.map(p => [cx + (p[0] - cx) * f, cy + (p[1] - cy) * f]);
+    }
+
+    function fillPoly(ctx, poly, sx, sy) {
+        ctx.beginPath();
+        for (let i = 0; i < poly.length; i++) {
+            const px = poly[i][0] * sx, py = poly[i][1] * sy;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // --- Delaunay triangulation (Bowyer-Watson) over the 478 face landmarks ---
+    const meshTriCache = {};
+
+    function delaunay(pts) {
+        const n = pts.length;
+        const EPS = 1e-9;
+        let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+        for (let i = 0; i < n; i++) {
+            const p = pts[i];
+            if (p.x < minx) minx = p.x;
+            if (p.y < miny) miny = p.y;
+            if (p.x > maxx) maxx = p.x;
+            if (p.y > maxy) maxy = p.y;
+        }
+        const dx = (maxx - minx) || 1, dy = (maxy - miny) || 1;
+        const dmax = Math.max(dx, dy) * 10;
+        const midx = (minx + maxx) / 2, midy = (miny + maxy) / 2;
+        const P = pts.concat([
+            { x: midx - dmax, y: midy - dmax },
+            { x: midx, y: midy + dmax },
+            { x: midx + dmax, y: midy - dmax }
+        ]);
+        let tris = [{ a: n, b: n + 1, c: n + 2 }];
+        const inCirc = (a, b, c, p) => {
+            const ax = P[a].x, ay = P[a].y, bx = P[b].x, by = P[b].y, cx = P[c].x, cy = P[c].y;
+            const px = p.x, py = p.y;
+            const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+            if (Math.abs(d) < 1e-12) return false;
+            const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
+            const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
+            const r2 = (ux - ax) * (ux - ax) + (uy - ay) * (uy - ay);
+            return (ux - px) * (ux - px) + (uy - py) * (uy - py) <= r2 + EPS;
+        };
+        for (let i = 0; i < n; i++) {
+            const p = P[i];
+            const bad = [], next = [];
+            for (const t of tris) {
+                if (inCirc(t.a, t.b, t.c, p)) bad.push(t); else next.push(t);
+            }
+            const edges = new Map();
+            const key = (e1, e2) => e1 < e2 ? e1 + '_' + e2 : e2 + '_' + e1;
+            for (const t of bad) {
+                for (const [e1, e2] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]]) {
+                    const k = key(e1, e2);
+                    if (edges.has(k)) { const v = edges.get(k); v.c += 1; if (v.c >= 2) edges.delete(k); }
+                    else edges.set(k, { c: 1, e1, e2 });
+                }
+            }
+            for (const [k, v] of edges) next.push({ a: v.e1, b: v.e2, c: i });
+            tris = next;
+        }
+        const out = [];
+        for (const t of tris) {
+            if (t.a < n && t.b < n && t.c < n) out.push([t.a, t.b, t.c]);
+        }
+        return out;
+    }
+
+    function inPoly(px, py, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+            if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        return inside;
+    }
+
     function buildSmoothLayer(source, w, h) {
+        const lands = getLands();
+        if (!lands) return false;
         const sw = Math.max(64, Math.round(w / 4));
         const sh = Math.max(36, Math.round(h / 4));
         if (!state.smoothCanvas) {
@@ -499,8 +641,9 @@
             state.maskCanvas.height = mh;
         }
 
+        let sfilter = 'blur(' + Math.max(1, Math.round(w / 800)) + 'px)';
         const sctx = state.smoothCtx;
-        sctx.filter = 'blur(' + Math.max(1, Math.round(w / 640)) + 'px)';
+        sctx.filter = sfilter;
         sctx.drawImage(source, 0, 0, sw, sh);
         sctx.filter = 'none';
 
@@ -509,28 +652,84 @@
         lctx.imageSmoothingEnabled = true;
         lctx.drawImage(state.smoothCanvas, 0, 0, w, h);
 
+        // Mask = real triangular skin mesh (Delaunay over landmarks), holes excluded by topology
         const m = state.maskCtx;
         m.clearRect(0, 0, mw, mh);
-        m.filter = 'blur(' + Math.max(5, Math.round(h / 48)) + 'px)';
-        m.fillStyle = '#fff';
-        for (const poly of state.facePolys) {
-            let cx = 0, cy = 0;
-            for (const p of poly) { cx += p[0]; cy += p[1]; }
-            cx /= poly.length; cy /= poly.length;
-            m.beginPath();
-            for (let i = 0; i < poly.length; i++) {
-                const px = (cx + (poly[i][0] - cx) * 1.12) * mw;
-                const py = (cy + (poly[i][1] - cy) * 1.12) * mh;
-                if (i === 0) m.moveTo(px, py); else m.lineTo(px, py);
-            }
-            m.closePath();
-            m.fill();
-        }
         m.filter = 'none';
+        m.fillStyle = '#fff';
+        for (const lms of lands) {
+            const cnt = lms.length;
+            if (!(cnt in meshTriCache)) meshTriCache[cnt] = delaunay(lms);
+            const tris = meshTriCache[cnt];
+            const oval = expandPoly(convexHull(lms.map(p => [p.x, p.y])), 1.05);
+            const feats = [];
+            for (const f of FACE_HOLES) {
+                if (!f.idxs.every(i => i < cnt)) continue;
+                feats.push(expandPoly(convexHull(f.idxs.map(i => [lms[i].x, lms[i].y])), 1.3));
+            }
+            for (const t of tris) {
+                const a = lms[t[0]], b = lms[t[1]], c = lms[t[2]];
+                const e1 = (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
+                const e2 = (a.x - c.x) * (a.x - c.x) + (a.y - c.y) * (a.y - c.y);
+                const e3 = (b.x - c.x) * (b.x - c.x) + (b.y - c.y) * (b.y - c.y);
+                if (e1 > 0.08 || e2 > 0.08 || e3 > 0.08) continue;
+                const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3;
+                if (!inPoly(cx, cy, oval)) continue;
+                let skip = false;
+                for (const f of feats) {
+                    if (inPoly(a.x, a.y, f) || inPoly(b.x, b.y, f) || inPoly(c.x, c.y, f)) { skip = true; break; }
+                }
+                if (skip) continue;
+                fp3(m, a, b, c, mw, mh);
+            }
+        }
+
+        // Single-pass feather of the whole mask (brushes the triangle edges softly)
+        if (!state.maskBlur) {
+            state.maskBlur = document.createElement('canvas');
+            state.maskBlurCtx = state.maskBlur.getContext('2d');
+        }
+        if (state.maskBlur.width !== mw || state.maskBlur.height !== mh) {
+            state.maskBlur.width = mw;
+            state.maskBlur.height = mh;
+        }
+        const mb = state.maskBlurCtx;
+        mb.clearRect(0, 0, mw, mh);
+        mb.filter = 'blur(' + Math.max(6, Math.round(h / 40)) + 'px)';
+        mb.drawImage(state.maskCanvas, 0, 0);
+        mb.filter = 'none';
+        m.clearRect(0, 0, mw, mh);
+        m.drawImage(state.maskBlur, 0, 0);
 
         lctx.globalCompositeOperation = 'destination-in';
         lctx.drawImage(state.maskCanvas, 0, 0, w, h);
         lctx.globalCompositeOperation = 'source-over';
+        return true;
+    }
+
+    function fp3(ctx, a, b, c, sx, sy) {
+        ctx.beginPath();
+        ctx.moveTo(a.x * sx, a.y * sy);
+        ctx.lineTo(b.x * sx, b.y * sy);
+        ctx.lineTo(c.x * sx, c.y * sy);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function paintSmooth(ctx) {
+        ctx.save();
+        ctx.globalAlpha = smoothAlpha();
+        ctx.drawImage(state.smoothLayer, 0, 0);
+        ctx.globalAlpha = 1;
+        if (state.glow > 0) {
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.04 + (state.glow / 100) * 0.13;
+            ctx.drawImage(state.smoothLayer, 0, 0);
+        }
+        ctx.globalCompositeOperation = 'soft-light';
+        ctx.globalAlpha = 0.06;
+        ctx.drawImage(state.smoothLayer, 0, 0);
+        ctx.restore();
     }
 
     function drawFaceOverlay() {
@@ -540,7 +739,7 @@
             ov.style.display = 'none';
             return;
         }
-        if (performance.now() - state.lastDet >= 150) {
+        if (performance.now() - state.lastDet >= 120) {
             state.lastDet = performance.now();
             detectFaces(remoteVideo);
         }
@@ -556,11 +755,8 @@
         if (ov.width !== vw || ov.height !== vh) { ov.width = vw; ov.height = vh; }
         const octx = ov.getContext('2d');
         octx.clearRect(0, 0, vw, vh);
-        if (state.facePolys && state.facePolys.length) {
-            buildSmoothLayer(remoteVideo, vw, vh);
-            octx.globalAlpha = smoothAlpha();
-            octx.drawImage(state.smoothLayer, 0, 0);
-            octx.globalAlpha = 1;
+        if (state.faceLms && buildSmoothLayer(remoteVideo, vw, vh)) {
+            paintSmooth(octx);
         }
     }
 
@@ -583,7 +779,7 @@
         if (ov) ov.style.display = 'none';
     }
 
-    // ─── UI Controls ────────────────────────────────────────
+    // â”€â”€â”€ UI Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function setupUIControls() {
         // Theme toggle
         $('#btn-theme').addEventListener('click', () => {
@@ -593,12 +789,12 @@
         // Copy buttons
         $('#btn-copy-code').addEventListener('click', () => {
             copyToClipboard(roomCode.textContent);
-            showToast('📋 Código copiado', 'success');
+            showToast('ðŸ“‹ CÃ³digo copiado', 'success');
         });
 
         $('#btn-copy-url').addEventListener('click', () => {
             copyToClipboard(mobileUrl.textContent);
-            showToast('📋 URL copiada', 'success');
+            showToast('ðŸ“‹ URL copiada', 'success');
         });
 
         // Virtual camera toggle
@@ -623,7 +819,7 @@
             state.socket.emit('flash-toggle');
             const btn = $('#d-btn-flash');
             btn.classList.toggle('flash-on', state.flashOn);
-            btn.innerHTML = state.flashOn ? '<span>💡</span> Flash' : '<span>⚡</span> Flash';
+            btn.innerHTML = state.flashOn ? '<span>ðŸ’¡</span> Flash' : '<span>âš¡</span> Flash';
         });
 
         $('#d-btn-mic').addEventListener('click', () => {
@@ -631,7 +827,7 @@
             state.socket.emit('mic-toggle');
             const btn = $('#d-btn-mic');
             btn.classList.toggle('active', state.micOn);
-            btn.innerHTML = state.micOn ? '<span>🎤</span> Mic' : '<span>🔇</span> Mic';
+            btn.innerHTML = state.micOn ? '<span>ðŸŽ¤</span> Mic' : '<span>ðŸ”‡</span> Mic';
         });
 
         // Resolution buttons
@@ -701,6 +897,14 @@
             if (state.smooth === 0) stopPreviewLoop();
         });
 
+        // Skin brightening
+        $('#d-glow').addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            $('#d-glow-val').textContent = val + '%';
+            state.glow = val;
+            applyPreviewFilter();
+        });
+
         // Face mode
         document.querySelectorAll('#d-face-mode-group button').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -712,7 +916,8 @@
                     startPreviewLoop();
                 } else {
                     state.faceMode = false;
-                    state.facePolys = null;
+                    state.faceLms = false;
+                    state.land = state.landPrev = state.landTarget = null;
                     stopPreviewLoop();
                 }
                 document.querySelectorAll('#d-face-mode-group button').forEach(b => b.classList.remove('active'));
@@ -760,7 +965,7 @@
         });
     }
 
-    // ─── Video Controls ─────────────────────────────────────
+    // â”€â”€â”€ Video Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function toggleFullscreen() {
         const wrapper = $('#video-wrapper');
         if (!document.fullscreenElement) {
@@ -814,7 +1019,7 @@
         $('#btn-grid').classList.toggle('active', state.gridVisible);
     }
 
-    // ─── Screenshot ─────────────────────────────────────────
+    // â”€â”€â”€ Screenshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function takeScreenshot() {
         if (!state.remoteStream) return;
 
@@ -839,12 +1044,8 @@
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         if (state.faceMode && state.smooth > 0) {
             detectFaces(canvas);
-            if (state.facePolys && state.facePolys.length) {
-                buildSmoothLayer(canvas, canvas.width, canvas.height);
-                ctx.save();
-                ctx.globalAlpha = smoothAlpha();
-                ctx.drawImage(state.smoothLayer, 0, 0);
-                ctx.restore();
+            if (state.faceLms && buildSmoothLayer(canvas, canvas.width, canvas.height)) {
+                paintSmooth(ctx);
             }
         } else {
             smoothSkin(ctx, canvas.width, canvas.height);
@@ -856,7 +1057,7 @@
         link.href = canvas.toDataURL('image/png');
         link.click();
 
-        showToast('📷 Captura guardada', 'success');
+        showToast('ðŸ“· Captura guardada', 'success');
 
         // Flash effect
         const flash = document.createElement('div');
@@ -879,7 +1080,7 @@
     `;
     document.head.appendChild(flashStyle);
 
-    // ─── Recording ──────────────────────────────────────────
+    // â”€â”€â”€ Recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function toggleRecording() {
         if (state.recording) {
             stopRecording();
@@ -904,7 +1105,7 @@
         try {
             state.mediaRecorder = new MediaRecorder(state.remoteStream, options);
         } catch (e) {
-            showToast('Error al iniciar grabación', 'error');
+            showToast('Error al iniciar grabaciÃ³n', 'error');
             return;
         }
 
@@ -922,7 +1123,7 @@
             link.href = url;
             link.click();
             URL.revokeObjectURL(url);
-            showToast('🎬 Grabación guardada', 'success');
+            showToast('ðŸŽ¬ GrabaciÃ³n guardada', 'success');
         };
 
         state.mediaRecorder.start(1000); // Collect data every second
@@ -932,7 +1133,7 @@
         // UI
         recordingIndicator.style.display = 'flex';
         $('#btn-record').classList.add('active');
-        $('#btn-record').innerHTML = '⏹️';
+        $('#btn-record').innerHTML = 'â¹ï¸';
 
         // Timer
         state.recordTimerInterval = setInterval(() => {
@@ -951,19 +1152,19 @@
         state.recording = false;
         recordingIndicator.style.display = 'none';
         $('#btn-record').classList.remove('active');
-        $('#btn-record').innerHTML = '⏺️';
+        $('#btn-record').innerHTML = 'âºï¸';
 
         if (state.recordTimerInterval) {
             clearInterval(state.recordTimerInterval);
         }
     }
 
-    // ─── Stats & Status Updates ─────────────────────────────
+    // â”€â”€â”€ Stats & Status Updates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function updateStats(stats) {
         if (!stats) return;
 
         const resolution = stats.video.width
-            ? `${stats.video.width}×${stats.video.height}`
+            ? `${stats.video.width}Ã—${stats.video.height}`
             : '--';
         const fps = stats.video.fps ? Math.round(stats.video.fps) : '--';
         const bitrate = stats.video.bitrate
@@ -992,12 +1193,12 @@
 
     function updateBattery(data) {
         if (!data) return;
-        const icon = data.charging ? '🔌' : (data.level > 20 ? '🔋' : '🪫');
+        const icon = data.charging ? 'ðŸ”Œ' : (data.level > 20 ? 'ðŸ”‹' : 'ðŸª«');
         $('#d-stat-battery').textContent = `${icon} ${data.level}%`;
     }
 
     function updateCapabilities(caps) {
-        console.log('📱 Camera capabilities:', caps);
+        console.log('ðŸ“± Camera capabilities:', caps);
     }
 
     function updateCameraStatus(status) {
@@ -1005,7 +1206,7 @@
             state.flashOn = status.flash;
             const btn = $('#d-btn-flash');
             btn.classList.toggle('flash-on', state.flashOn);
-            btn.innerHTML = state.flashOn ? '<span>💡</span> Flash' : '<span>⚡</span> Flash';
+            btn.innerHTML = state.flashOn ? '<span>ðŸ’¡</span> Flash' : '<span>âš¡</span> Flash';
         }
 
         if (status.resolution) {
@@ -1027,15 +1228,15 @@
         }
     }
 
-    // ─── Theme ──────────────────────────────────────────────
+    // â”€â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function setTheme(theme) {
         state.theme = theme;
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('phonecam-theme', theme);
-        $('#btn-theme').textContent = theme === 'dark' ? '🌙' : '☀️';
+        $('#btn-theme').textContent = theme === 'dark' ? 'ðŸŒ™' : 'â˜€ï¸';
     }
 
-    // ─── UI Helpers ─────────────────────────────────────────
+    // â”€â”€â”€ UI Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function showVideoPanel(show) {
         connectPanel.style.display = show ? 'none' : 'block';
         videoPanel.style.display = show ? 'block' : 'none';
@@ -1046,7 +1247,7 @@
         const labels = {
             connected: 'Conectado',
             connecting: 'Conectando...',
-            disconnected: 'Sin conexión'
+            disconnected: 'Sin conexiÃ³n'
         };
         connectionText.textContent = labels[status] || status;
     }
@@ -1083,7 +1284,7 @@
         }, 3000);
     }
 
-    // ─── Keyboard Shortcuts ─────────────────────────────────
+    // â”€â”€â”€ Keyboard Shortcuts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     document.addEventListener('keydown', (e) => {
         // Only when not typing in an input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -1122,7 +1323,7 @@
         }
     });
 
-    // ─── Start ──────────────────────────────────────────────
+    // â”€â”€â”€ Start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     document.addEventListener('DOMContentLoaded', init);
 
 })();
