@@ -352,7 +352,8 @@ socketServer.on('connection', (socket) => {
         'camera-switch', 'flash-toggle', 'zoom-change', 'exposure-change',
         'focus-change', 'wb-change', 'resolution-change', 'fps-change',
         'filter-change', 'brightness-change', 'contrast-change',
-        'saturation-change', 'mic-toggle', 'mic-gain', 'orientation-change'
+        'saturation-change', 'mic-toggle', 'mic-gain', 'orientation-change',
+        'beauty-config'
 
     ];
 

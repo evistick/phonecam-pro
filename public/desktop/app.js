@@ -58,7 +58,8 @@
         maskCtx: null,
         maskBlur: null,
         maskBlurCtx: null,
-        previewRAF: null
+        previewRAF: null,
+        dest: 'pc'
     };
 
     // â”€â”€â”€ DOM Elements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -95,11 +96,12 @@
         });
 
         // Peer events
-        state.socket.on('peer-joined', (data) => {
+state.socket.on('peer-joined', (data) => {
             if (data.role === 'mobile') {
-                console.log('ðŸ“± Mobile peer joined');
+                console.log('📱 Mobile peer joined');
                 updateConnectionBadge('connecting');
-                showToast('ðŸ“± TelÃ©fono conectado, iniciando stream...', 'success');
+                showToast('📱 Teléfono conectado, iniciando stream...', 'success');
+                if (state.dest === 'phone') emitBeautyConfig();
             }
         });
 
@@ -304,15 +306,17 @@
 
             const interval = Math.max(16, Math.round(1000 / VCAM_FPS));
             state.vcamTimer = setInterval(() => {
-                if (!state.vcamActive || !state.remoteStream) return;
+if (!state.vcamActive || !state.remoteStream) return;
                 state.vcamCtx.drawImage(remoteVideo, 0, 0, w, h);
-if (state.faceMode && state.smooth > 0) {
+                if (state.dest !== 'phone') {
+                    if (state.faceMode && state.smooth > 0) {
                         detectFaces(state.vcamCanvas);
                         if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
                             paintSmooth(state.vcamCtx);
                         }
                     } else {
-                    smoothSkin(state.vcamCtx, w, h);
+                        smoothSkin(state.vcamCtx, w, h);
+                    }
                 }
                 const img = state.vcamCtx.getImageData(0, 0, w, h);
                 const nv12 = rgbaToNv12(img.data, w, h);
@@ -362,10 +366,19 @@ if (state.faceMode && state.smooth > 0) {
         return 0.25 + (state.smooth / 100) * 0.5;
     }
 
+    function emitBeautyConfig() {
+        state.socket.emit('beauty-config', {
+            on: state.dest === 'phone',
+            smooth: state.smooth,
+            glow: state.glow,
+            faceMode: state.faceMode
+        });
+    }
+
     function applyPreviewFilter() {
         const def = PHONECAM.FILTERS[state.currentFilter];
         let css = def && def.css !== 'none' ? def.css : '';
-        if (state.smooth > 0 && !state.faceMode) {
+        if (state.smooth > 0 && !state.faceMode && state.dest === 'pc') {
             const s = state.smooth / 100;
             const g = state.glow / 100;
             css += (css ? ' ' : '') + 'blur(' + (s * 2).toFixed(2) + 'px) brightness(' + (1 + s * 0.05 + g * 0.12).toFixed(3) + ')';
@@ -733,7 +746,7 @@ if (state.faceMode && state.smooth > 0) {
     function drawFaceOverlay() {
         const vw = remoteVideo.videoWidth, vh = remoteVideo.videoHeight;
         const ov = $('#face-overlay');
-        if (!vw || !vh || !state.faceMode || state.smooth <= 0) {
+        if (!vw || !vh || !state.faceMode || state.smooth <= 0 || state.dest === 'phone') {
             ov.style.display = 'none';
             return;
         }
@@ -756,7 +769,7 @@ if (state.faceMode && state.smooth > 0) {
     }
 
     function startPreviewLoop() {
-        if (!state.previewRAF && state.faceMode && state.smooth > 0) {
+        if (!state.previewRAF && state.dest === 'pc' && state.faceMode && state.smooth > 0) {
             const loop = () => {
                 drawFaceOverlay();
                 state.previewRAF = requestAnimationFrame(loop);
@@ -890,6 +903,7 @@ if (state.faceMode && state.smooth > 0) {
             applyPreviewFilter();
             if (state.smooth > 0 && state.faceMode) startPreviewLoop();
             if (state.smooth === 0) stopPreviewLoop();
+            if (state.dest === 'phone') emitBeautyConfig();
         });
 
         // Skin brightening
@@ -898,6 +912,7 @@ if (state.faceMode && state.smooth > 0) {
             $('#d-glow-val').textContent = val + '%';
             state.glow = val;
             applyPreviewFilter();
+            if (state.dest === 'phone') emitBeautyConfig();
         });
 
         // Face mode
@@ -908,7 +923,7 @@ if (state.faceMode && state.smooth > 0) {
                     const ok = await ensureFaceDetector();
                     if (!ok) return;
                     state.faceMode = true;
-                    startPreviewLoop();
+                    if (state.dest === 'pc') startPreviewLoop();
                 } else {
                     state.faceMode = false;
                     state.faceLms = false;
@@ -918,6 +933,27 @@ if (state.faceMode && state.smooth > 0) {
                 document.querySelectorAll('#d-face-mode-group button').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 applyPreviewFilter();
+                if (state.dest === 'phone') emitBeautyConfig();
+            });
+        });
+
+        // Processing destination: PC (local) or iPhone (on-device)
+        document.querySelectorAll('#d-dest-group button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.classList.contains('active')) return;
+                document.querySelectorAll('#d-dest-group button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.dest = btn.dataset.value;
+                if (state.dest === 'phone') {
+                    if (state.previewRAF) stopPreviewLoop();
+                    emitBeautyConfig();
+                } else {
+                    state.socket.emit('beauty-config', { on: false });
+                    if (state.smooth > 0) {
+                        if (state.faceMode) startPreviewLoop();
+                        else applyPreviewFilter();
+                    }
+                }
             });
         });
 

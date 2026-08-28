@@ -35,7 +35,9 @@
         statsVisible: false,
         settingsVisible: false,
         orientation: 'auto', // 'auto' | 'portrait' | 'landscape'
-        blackout: false
+        blackout: false,
+        beautyOn: false,
+        beautyConfig: { on: false, smooth: 70, glow: 50, faceMode: true }
     };
 
     // ─── DOM Elements ───────────────────────────────────────
@@ -516,6 +518,13 @@
     async function switchCamera() {
         state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
 
+        const beautyReset = state.beautyOn;
+        if (beautyReset) {
+            const rawV = PhoneCamBeauty.stop();
+            if (rawV && rawV.readyState !== 'ended') rawV.stop();
+            state.beautyOn = false;
+        }
+
         state.stream.getTracks().forEach(track => track.stop());
 
         const res = PHONECAM.RESOLUTIONS[state.currentResolution];
@@ -553,6 +562,8 @@
             state.flashOn = false;
             updateFlashUI();
             applyVideoFilters();
+
+            if (beautyReset) await startBeauty();
         } catch (err) {
             console.error('Switch camera error:', err);
         }
@@ -829,6 +840,60 @@
         state.socket.on('orientation-change', (data) => {
             applyOrientation(data.value);
         });
+
+        state.socket.on('beauty-config', (data) => {
+            applyBeautyConfig(data);
+        });
+    }
+
+    // ─── On-device Beauty (iPhone) ──────────────────────────
+    async function startBeauty() {
+        if (state.beautyOn || !state.stream) return;
+        const rawStream = state.stream;
+        const rawV = rawStream.getVideoTracks()[0];
+        if (!rawV) return;
+        const cfg = state.beautyConfig;
+        const track = await PhoneCamBeauty.start({
+            rawStream: rawStream,
+            fps: Math.min(30, state.currentFPS),
+            vendorBase: '/shared/vendor/mediapipe/',
+            smooth: cfg.smooth,
+            glow: cfg.glow,
+            faceMode: cfg.faceMode
+        });
+        if (!track) return;
+        const audioTracks = rawStream.getAudioTracks();
+        rawStream.removeTrack(rawV);
+        state.stream = new MediaStream([track, ...audioTracks]);
+        state.beautyOn = true;
+        localVideo.srcObject = state.stream;
+        for (const rtc of Object.values(state.rtcs)) {
+            if (rtc && rtc.peerConnection) await rtc.replaceVideoTrack(track);
+        }
+    }
+
+    function stopBeauty() {
+        if (!state.beautyOn) return;
+        const processedStream = state.stream;
+        const audioTracks = processedStream ? processedStream.getAudioTracks() : [];
+        const rawV = PhoneCamBeauty.stop();
+        state.beautyOn = false;
+        state.stream = new MediaStream([...(rawV ? [rawV] : []), ...audioTracks]);
+        localVideo.srcObject = state.stream;
+        for (const rtc of Object.values(state.rtcs)) {
+            if (rtc && rtc.peerConnection && rawV) rtc.replaceVideoTrack(rawV);
+        }
+    }
+
+    function applyBeautyConfig(cfg) {
+        state.beautyConfig = Object.assign({}, state.beautyConfig, cfg);
+        if (cfg.on && !state.beautyOn) {
+            startBeauty();
+        } else if (!cfg.on && state.beautyOn) {
+            stopBeauty();
+        } else if (state.beautyOn) {
+            PhoneCamBeauty.configure(state.beautyConfig);
+        }
     }
 
     // ─── Battery Monitor ────────────────────────────────────
