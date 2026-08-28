@@ -1270,6 +1270,8 @@ if (!state.vcamActive || !state.remoteStream) return;
     function showVideoPanel(show) {
         connectPanel.style.display = show ? 'none' : 'block';
         videoPanel.style.display = show ? 'block' : 'none';
+        autoArrange();
+        saveLayout();
     }
 
     function updateConnectionBadge(status) {
@@ -1434,18 +1436,96 @@ if (!state.vcamActive || !state.remoteStream) return;
     }
 
     function loadLayout() {
+        defaultLayout();
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) {}
-        defaultLayout();
-        if (!saved) { saveLayout(); return; }
         const rect = document.getElementById('main').getBoundingClientRect();
-        let any = false;
-        document.querySelectorAll('.win').forEach(el => {
-            if (el.id === 'connect-panel') return;
-            const r = saved[el.id];
-            if (r && r.w) { applyRect(el, r, rect); any = true; }
+        if (saved) {
+            document.querySelectorAll('.win').forEach(el => {
+                if (el.id === 'connect-panel') return;
+                const r = saved[el.id];
+                if (r && r.w) {
+                    el.style.width = clampNum(r.w, 240, Math.max(240, rect.width - 16)) + 'px';
+                    if (r.h) el.style.height = r.h + 'px';
+                    else el.style.height = '';
+                }
+            });
+        }
+        autoArrange();
+        saveLayout();
+    }
+
+    // Reactive tiling: on drop the windows auto-arrange into two columns
+    // (video on one side, control panels stacked on the other), always inside #main.
+    function autoArrange(animated) {
+        const mainEl = document.getElementById('main');
+        const rect = mainEl.getBoundingClientRect();
+        const pad = 8;
+        const wins = Array.from(document.querySelectorAll('.win')).filter(el => {
+            if (!el.id || el.id === 'connect-panel') return false;
+            if (el.style.display === 'none') return false;
+            if (!el.offsetWidth && !el.offsetHeight) return false;
+            return true;
         });
-        if (!any) defaultLayout();
+        if (wins.length) {
+            if (animated) {
+                mainEl.classList.add('arranging');
+                setTimeout(() => mainEl.classList.remove('arranging'), 240);
+            }
+            const videoEl = document.getElementById('video-panel');
+            const videoOn = videoEl && wins.indexOf(videoEl) !== -1;
+
+            const place = (el, x, y, w) => {
+                el.style.left = Math.round(x) + 'px';
+                el.style.top = Math.round(y) + 'px';
+                if (w) el.style.width = Math.round(w) + 'px';
+            };
+
+            let vw = 0, vh = 0, colX = pad, colBand = rect.width - pad * 2;
+            if (videoOn) {
+                vw = clampNum(parseFloat(videoEl.style.width) || Math.min(800, rect.width - pad * 2 - 320), 360, Math.max(360, rect.width - pad * 2 - 240));
+                vh = clampNum(parseFloat(videoEl.style.height) || (vw * 9 / 16), 120, rect.height - pad * 2);
+                videoEl.style.height = vh + 'px';
+                const videoRight = (parseFloat(videoEl.style.left) || pad) > (rect.width - vw) / 2;
+                if (videoRight) {
+                    colX = pad;
+                    colBand = rect.width - pad * 2 - vw - pad;
+                    place(videoEl, rect.width - pad - vw, pad, vw);
+                } else {
+                    colX = pad + vw + pad;
+                    colBand = rect.width - pad * 2 - vw - pad;
+                    place(videoEl, pad, pad, vw);
+                }
+            }
+
+            const items = [];
+            wins.sort((a, b) => {
+                const ay = parseFloat(a.style.top) || 0, by = parseFloat(b.style.top) || 0;
+                const ax = parseFloat(a.style.left) || 0, bx = parseFloat(b.style.left) || 0;
+                return ay - by || ax - bx;
+            });
+            for (const el of wins) {
+                if (el === videoEl) continue;
+                const lo = Math.min(240, Math.max(120, colBand));
+                const w = clampNum(parseFloat(el.style.width) || 260, lo, Math.max(lo, colBand));
+                el.style.width = w + 'px';
+                el.style.height = '';
+                items.push({ el, w, h: el.offsetHeight || 90 });
+            }
+
+            // Stack panels in the side column, wrapping to extra columns if needed
+            let x = colX, y = pad, maxW = 0;
+            for (const it of items) {
+                if (y + it.h > rect.height - pad) {
+                    x += maxW + pad;
+                    maxW = 0;
+                    y = pad;
+                }
+                place(it.el, x, y, it.w);
+                maxW = Math.max(maxW, it.w);
+                y += it.h + pad;
+            }
+        }
     }
 
     function raiseWin(el) {
@@ -1459,12 +1539,15 @@ if (!state.vcamActive || !state.remoteStream) return;
         handle.addEventListener('pointerdown', (e) => {
             if (e.target.closest('button, select, input, textarea, a, label')) return;
             e.preventDefault();
+            document.getElementById('main').classList.remove('arranging');
             raiseWin(el);
             const rect = el.getBoundingClientRect();
             const mainRect = document.getElementById('main').getBoundingClientRect();
             const dx = e.clientX - rect.left;
             const dy = e.clientY - rect.top;
+            let moved = false;
             const onMove = (ev) => {
+                if (Math.abs(ev.clientX - e.clientX) > 4 || Math.abs(ev.clientY - e.clientY) > 4) moved = true;
                 const x = clampNum(ev.clientX - dx - mainRect.left, 8, mainRect.width - el.offsetWidth - 8);
                 const y = clampNum(ev.clientY - dy - mainRect.top, 8, mainRect.height - el.offsetHeight - 8);
                 el.style.left = x + 'px';
@@ -1473,7 +1556,10 @@ if (!state.vcamActive || !state.remoteStream) return;
             const onUp = () => {
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
-                saveLayout();
+                if (moved) {
+                    autoArrange(true);
+                    saveLayout();
+                }
             };
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
@@ -1486,6 +1572,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         resizer.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            document.getElementById('main').classList.remove('arranging');
             raiseWin(el);
             const rect = el.getBoundingClientRect();
             const mainRect = document.getElementById('main').getBoundingClientRect();
@@ -1519,18 +1606,14 @@ if (!state.vcamActive || !state.remoteStream) return;
             bindWindowResize(el);
         });
         window.addEventListener('resize', () => {
-            const rect = document.getElementById('main').getBoundingClientRect();
-            document.querySelectorAll('.win').forEach(el => {
-                if (el.id === 'connect-panel') return;
-                const w = parseFloat(el.style.width) || (el.id === 'video-panel' ? 420 : 260);
-                const h = el.style.height ? (parseFloat(el.style.height) || 0) : (el.id === 'video-panel' ? Math.round(w * 9 / 16) : 0);
-                applyRect(el, { x: parseFloat(el.style.left) || 8, y: parseFloat(el.style.top) || 8, w, h: h || null }, rect);
-            });
+            autoArrange();
+            saveLayout();
         });
         const resetBtn = document.getElementById('btn-reset-layout');
         if (resetBtn) resetBtn.addEventListener('click', () => {
             try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
             defaultLayout();
+            autoArrange();
             saveLayout();
         });
     }

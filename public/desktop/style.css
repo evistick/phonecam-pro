@@ -218,6 +218,14 @@ html, body {
     z-index: 60;
 }
 
+#main.arranging .win {
+    transition:
+        left 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+        top 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+        width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+        height 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .win-resizer {
     position: absolute;
     right: 0;
@@ -787,16 +795,6 @@ html, body {
 
 #camera-ctrl-panel .ctrl-buttons-row {
     margin-bottom: 8px;
-}
-
-#camera-ctrl-panel .ctrl-two-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
-#camera-ctrl-panel .ctrl-two-col .ctrl-group {
-    margin-bottom: 0;
 }
 
 .ctrl-action-btn {
