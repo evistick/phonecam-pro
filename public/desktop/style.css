@@ -189,45 +189,90 @@ html, body {
 
 #main {
     flex: 1;
-    display: flex;
+    position: relative;
     overflow: hidden;
     gap: 0;
 }
 
 #video-section {
-    flex: 1;
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
 }
 
 #controls-section {
-    width: 440px;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+/* ─── Floating Windows ────────────────────────────────── */
+.win {
+    position: absolute;
+    z-index: 1;
+    box-sizing: border-box;
+    pointer-events: auto;
+}
+
+.win.z-top {
+    z-index: 60;
+}
+
+.win-resizer {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    z-index: 5;
+    pointer-events: auto;
+}
+
+.win-resizer::after {
+    content: '';
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid var(--text-muted);
+    border-bottom: 2px solid var(--text-muted);
+    opacity: 0.45;
+}
+
+#connect-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 50;
+    width: 480px;
+    max-width: calc(100% - 40px);
+}
+
+.window-bar {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-glass);
+    cursor: grab;
+    user-select: none;
+    font-size: 11.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
-    overflow-y: auto;
-    padding: 14px;
-    padding-left: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    align-content: start;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
 
-#controls-section::-webkit-scrollbar {
-    width: 4px;
+.window-bar::before {
+    content: '⠿';
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
-#controls-section::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-#controls-section::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.12);
-    border-radius: 2px;
+.window-bar:active {
+    cursor: grabbing;
 }
 
 /* ─── Panel Card ────────────────────────────────────── */
@@ -397,18 +442,22 @@ html, body {
 /* ─── Video Panel ───────────────────────────────────── */
 
 #video-panel {
-    max-width: 100%;
-    aspect-ratio: 16/9;
-    position: relative;
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
 }
 
 #video-wrapper {
     position: relative;
+    flex: 1;
+    min-height: 0;
     width: 100%;
-    height: 100%;
     background: #000;
-    border-radius: var(--radius);
-    overflow: hidden;
 }
 
 #remote-video {
@@ -596,22 +645,33 @@ html, body {
     overflow: hidden;
     box-shadow: var(--shadow);
     min-width: 0;
-}
-
-#stats-panel {
-    grid-column: 1 / -1;
+    min-width: 260px;
 }
 
 .ctrl-header {
     padding: 7px 12px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-glass);
+    cursor: grab;
+    user-select: none;
+}
+
+.ctrl-header:active {
+    cursor: grabbing;
+}
+
+.ctrl-header::before {
+    content: '⠿';
+    margin-right: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
 .ctrl-header h3 {
     font-size: 11.5px;
     font-weight: 600;
     letter-spacing: 0.1px;
+    display: inline;
 }
 
 .ctrl-body {
@@ -718,6 +778,85 @@ html, body {
     color: var(--accent-light);
     font-family: var(--font-mono);
     font-size: 10px;
+}
+
+/* Compact wide camera panel */
+#camera-ctrl-panel .ctrl-body {
+    padding: 8px 10px;
+}
+
+#camera-ctrl-panel .ctrl-buttons-row {
+    margin-bottom: 8px;
+}
+
+#camera-ctrl-panel .ctrl-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+#camera-ctrl-panel .ctrl-two-col .ctrl-group {
+    margin-bottom: 0;
+}
+
+.ctrl-action-btn {
+    white-space: nowrap;
+}
+
+/* Beauty on/off switch */
+.switch-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.switch-row input {
+    display: none;
+}
+
+.switch-track {
+    width: 44px;
+    height: 26px;
+    border-radius: 13px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    position: relative;
+    transition: background 0.2s, border-color 0.2s;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: transform 0.2s, background 0.2s;
+}
+
+.switch-row input:checked + .switch-track {
+    background: rgba(48, 209, 88, 0.22);
+    border-color: var(--success);
+}
+
+.switch-row input:checked + .switch-track .switch-thumb {
+    transform: translateX(18px);
+    background: var(--success);
+}
+
+.switch-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.switch-row input:checked ~ .switch-label {
+    color: var(--success);
 }
 
 /* Button groups */
@@ -934,29 +1073,9 @@ input[type="range"]::-moz-range-thumb {
 
 /* ─── Responsive ────────────────────────────────────── */
 
-@media (max-width: 1200px) {
-    #controls-section {
-        width: 400px;
-    }
-}
-
 @media (max-width: 900px) {
-    #main {
-        flex-direction: column;
-    }
-
-    #controls-section {
-        width: 100%;
-        padding: 14px;
-        grid-template-columns: 1fr;
-    }
-
-    #stats-panel {
-        grid-column: 1 / -1;
-    }
-
-    #video-section {
-        min-height: 260px;
+    #connect-panel {
+        width: 420px;
     }
 }
 

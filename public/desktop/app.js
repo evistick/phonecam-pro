@@ -38,7 +38,8 @@
         smoothCanvas: null,
         smoothCtx: null,
         currentFilter: 'none',
-        faceMode: false,
+        faceMode: true,
+        beautyEnabled: true,
         faceLoading: false,
         landmarker: null,
         faceLms: false,
@@ -78,6 +79,9 @@
 
     // â”€â”€â”€ Initialize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     function init() {
+        // Floating window layout
+        initWindows();
+
         // Connect to server
         state.socket = io({
             transports: ['websocket', 'polling'],
@@ -309,7 +313,7 @@ state.socket.on('peer-joined', (data) => {
 if (!state.vcamActive || !state.remoteStream) return;
                 state.vcamCtx.drawImage(remoteVideo, 0, 0, w, h);
                 if (state.dest !== 'phone') {
-                    if (state.faceMode && state.smooth > 0) {
+                    if (state.beautyEnabled && state.smooth > 0) {
                         detectFaces(state.vcamCanvas);
                         if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
                             paintSmooth(state.vcamCtx);
@@ -368,10 +372,10 @@ if (!state.vcamActive || !state.remoteStream) return;
 
     function emitBeautyConfig() {
         state.socket.emit('beauty-config', {
-            on: state.dest === 'phone',
+            on: state.dest === 'phone' && state.beautyEnabled,
             smooth: state.smooth,
             glow: state.glow,
-            faceMode: state.faceMode
+            faceMode: true
         });
     }
 
@@ -387,7 +391,7 @@ if (!state.vcamActive || !state.remoteStream) return;
     }
 
     function smoothSkin(ctx, w, h) {
-        if (!state.smooth || !w || !h) return;
+        if (!state.beautyEnabled || !state.smooth || !w || !h) return;
         const sw = Math.max(64, Math.round(w / 4));
         const sh = Math.max(36, Math.round(h / 4));
         if (!state.smoothCanvas) {
@@ -440,10 +444,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         } catch (err) {
             console.error('Face detector load failed:', err);
             showToast('âŒ No se pudo cargar el detector facial', 'error');
-            document.querySelectorAll('#d-face-mode-group button').forEach(b => {
-                b.classList.toggle('active', b.dataset.value === 'frame');
-            });
-            state.faceMode = false;
+            state.faceMode = true;
             applyPreviewFilter();
             return false;
         } finally {
@@ -746,7 +747,7 @@ if (!state.vcamActive || !state.remoteStream) return;
     function drawFaceOverlay() {
         const vw = remoteVideo.videoWidth, vh = remoteVideo.videoHeight;
         const ov = $('#face-overlay');
-        if (!vw || !vh || !state.faceMode || state.smooth <= 0 || state.dest === 'phone') {
+        if (!vw || !vh || !state.beautyEnabled || state.smooth <= 0 || state.dest === 'phone') {
             ov.style.display = 'none';
             return;
         }
@@ -769,13 +770,17 @@ if (!state.vcamActive || !state.remoteStream) return;
     }
 
     function startPreviewLoop() {
-        if (!state.previewRAF && state.dest === 'pc' && state.faceMode && state.smooth > 0) {
+        if (state.previewRAF || state.dest !== 'pc' || !state.beautyEnabled || state.smooth <= 0) return;
+        ensureFaceDetector().then((ok) => {
+            if (!ok) return;
+            if (state.previewRAF) return;
+            if (state.dest !== 'pc' || !state.beautyEnabled || state.smooth <= 0) return;
             const loop = () => {
                 drawFaceOverlay();
                 state.previewRAF = requestAnimationFrame(loop);
             };
             state.previewRAF = requestAnimationFrame(loop);
-        }
+        });
     }
 
     function stopPreviewLoop() {
@@ -901,7 +906,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             $('#d-smooth-val').textContent = val + '%';
             state.smooth = val;
             applyPreviewFilter();
-            if (state.smooth > 0 && state.faceMode) startPreviewLoop();
+            if (state.smooth > 0 && state.beautyEnabled) startPreviewLoop();
             if (state.smooth === 0) stopPreviewLoop();
             if (state.dest === 'phone') emitBeautyConfig();
         });
@@ -915,26 +920,19 @@ if (!state.vcamActive || !state.remoteStream) return;
             if (state.dest === 'phone') emitBeautyConfig();
         });
 
-        // Face mode
-        document.querySelectorAll('#d-face-mode-group button').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (btn.classList.contains('active')) return;
-                if (btn.dataset.value === 'face') {
-                    const ok = await ensureFaceDetector();
-                    if (!ok) return;
-                    state.faceMode = true;
-                    if (state.dest === 'pc') startPreviewLoop();
-                } else {
-                    state.faceMode = false;
-                    state.faceLms = false;
-                    state.land = state.landPrev = state.landTarget = null;
-                    stopPreviewLoop();
-                }
-                document.querySelectorAll('#d-face-mode-group button').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                applyPreviewFilter();
-                if (state.dest === 'phone') emitBeautyConfig();
-            });
+        // Beauty on/off toggle
+        $('#d-beauty-check').addEventListener('change', (e) => {
+            state.beautyEnabled = e.target.checked;
+            const lbl = $('#d-beauty-label');
+            $('#d-smooth').disabled = !state.beautyEnabled;
+            $('#d-glow').disabled = !state.beautyEnabled;
+            lbl.textContent = state.beautyEnabled ? 'Activado' : 'Desactivado';
+            if (state.beautyEnabled) {
+                if (state.dest === 'pc' && state.smooth > 0) startPreviewLoop();
+            } else {
+                stopPreviewLoop();
+            }
+            emitBeautyConfig();
         });
 
         // Processing destination: PC (local) or iPhone (on-device)
@@ -949,9 +947,10 @@ if (!state.vcamActive || !state.remoteStream) return;
                     emitBeautyConfig();
                 } else {
                     state.socket.emit('beauty-config', { on: false });
-                    if (state.smooth > 0) {
-                        if (state.faceMode) startPreviewLoop();
-                        else applyPreviewFilter();
+                    if (state.smooth > 0 && state.beautyEnabled) {
+                        startPreviewLoop();
+                    } else {
+                        applyPreviewFilter();
                     }
                 }
             });
@@ -1073,7 +1072,7 @@ if (!state.vcamActive || !state.remoteStream) return;
 
         ctx.drawImage(remoteVideo, 0, 0);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        if (state.faceMode && state.smooth > 0) {
+        if (state.beautyEnabled && state.smooth > 0) {
             detectFaces(canvas);
             if (state.faceLms && buildSmoothLayer(canvas, canvas.width, canvas.height)) {
                 paintSmooth(ctx);
@@ -1355,6 +1354,187 @@ if (!state.vcamActive || !state.remoteStream) return;
     });
 
     // â”€â”€â”€ Start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Window Management ─────────────────────────────────
+    const LAYOUT_KEY = 'phonecam-layout';
+
+    function getWindowArea() {
+        const header = document.getElementById('header');
+        const hh = header ? header.offsetHeight : 0;
+        return { w: window.innerWidth, h: window.innerHeight - hh };
+    }
+
+    function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function applyRect(el, r, rect) {
+        const isVideo = el.id === 'video-panel';
+        const minW = isVideo ? 360 : 240;
+        const minH = isVideo ? 200 : 90;
+        const w = clampNum(r.w, minW, Math.max(minW, rect.width - 16));
+        const hExplicit = !!r.h;
+        let h;
+        if (hExplicit) {
+            h = clampNum(r.h, minH, Math.max(minH, rect.height - 16));
+        } else if (isVideo) {
+            h = Math.round(w * 9 / 16);
+        } else {
+            h = el.offsetHeight || 60;
+        }
+        const x = clampNum(r.x, 8, Math.max(8, rect.width - w - 8));
+        const y = clampNum(r.y, 8, Math.max(8, rect.height - h - 8));
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.width = w + 'px';
+        if (hExplicit) el.style.height = h + 'px';
+        else el.style.height = '';
+    }
+
+    function defaultLayout() {
+        const area = getWindowArea();
+        const pad = 16;
+        const panelW = Math.min(470, Math.max(300, Math.round((area.w - pad) * 0.34)));
+        const videoW = Math.max(420, area.w - panelW - pad * 3);
+        const videoH = Math.max(236, Math.round(videoW * 9 / 16));
+        const assign = (id, x, y, w, h) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.left = Math.round(x) + 'px';
+            el.style.top = Math.round(y) + 'px';
+            el.style.width = Math.round(w) + 'px';
+            if (h) el.style.height = Math.round(h) + 'px';
+            else el.style.height = '';
+        };
+        assign('video-panel', pad, pad, videoW, videoH);
+        assign('stats-panel', pad, pad + videoH + pad, Math.min(430, area.w - panelW - pad * 3), null);
+        let cy = pad;
+        const rightX = area.w - panelW - pad;
+        ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'overlay-panel', 'vcam-panel'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.left = rightX + 'px';
+            el.style.top = cy + 'px';
+            el.style.width = panelW + 'px';
+            el.style.height = '';
+            cy += el.offsetHeight + pad;
+        });
+    }
+
+    function saveLayout() {
+        const out = {};
+        document.querySelectorAll('.win').forEach(el => {
+            const w = parseFloat(el.style.width) || 0;
+            if (!w) return;
+            out[el.id] = {
+                x: parseFloat(el.style.left) || 0,
+                y: parseFloat(el.style.top) || 0,
+                w: w,
+                h: el.style.height ? (parseFloat(el.style.height) || 0) : null
+            };
+        });
+        try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(out)); } catch (e) {}
+    }
+
+    function loadLayout() {
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) {}
+        defaultLayout();
+        if (!saved) { saveLayout(); return; }
+        const rect = document.getElementById('main').getBoundingClientRect();
+        let any = false;
+        document.querySelectorAll('.win').forEach(el => {
+            if (el.id === 'connect-panel') return;
+            const r = saved[el.id];
+            if (r && r.w) { applyRect(el, r, rect); any = true; }
+        });
+        if (!any) defaultLayout();
+    }
+
+    function raiseWin(el) {
+        document.querySelectorAll('.win').forEach(w => w.classList.remove('z-top'));
+        el.classList.add('z-top');
+    }
+
+    function bindWindowDrag(el) {
+        const handle = el.querySelector('.ctrl-header, .window-bar');
+        if (!handle) return;
+        handle.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button, select, input, textarea, a, label')) return;
+            e.preventDefault();
+            raiseWin(el);
+            const rect = el.getBoundingClientRect();
+            const mainRect = document.getElementById('main').getBoundingClientRect();
+            const dx = e.clientX - rect.left;
+            const dy = e.clientY - rect.top;
+            const onMove = (ev) => {
+                const x = clampNum(ev.clientX - dx - mainRect.left, 8, mainRect.width - el.offsetWidth - 8);
+                const y = clampNum(ev.clientY - dy - mainRect.top, 8, mainRect.height - el.offsetHeight - 8);
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                saveLayout();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        });
+    }
+
+    function bindWindowResize(el) {
+        const resizer = el.querySelector('.win-resizer');
+        if (!resizer) return;
+        resizer.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            raiseWin(el);
+            const rect = el.getBoundingClientRect();
+            const mainRect = document.getElementById('main').getBoundingClientRect();
+            const startW = el.offsetWidth;
+            const startH = el.offsetHeight;
+            const left = parseFloat(el.style.left) || 0;
+            const top = parseFloat(el.style.top) || 0;
+            const minW = el.id === 'video-panel' ? 360 : 240;
+            const minH = el.id === 'video-panel' ? 200 : 90;
+            const onMove = (ev) => {
+                const w = clampNum(startW + (ev.clientX - rect.left), minW, mainRect.width - left - 8);
+                const h = clampNum(startH + (ev.clientY - rect.top), minH, mainRect.height - top - 8);
+                el.style.width = w + 'px';
+                el.style.height = h + 'px';
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                saveLayout();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        });
+    }
+
+    function initWindows() {
+        loadLayout();
+        document.querySelectorAll('.win').forEach(el => {
+            if (el.id === 'connect-panel') return;
+            bindWindowDrag(el);
+            bindWindowResize(el);
+        });
+        window.addEventListener('resize', () => {
+            const rect = document.getElementById('main').getBoundingClientRect();
+            document.querySelectorAll('.win').forEach(el => {
+                if (el.id === 'connect-panel') return;
+                const w = parseFloat(el.style.width) || (el.id === 'video-panel' ? 420 : 260);
+                const h = el.style.height ? (parseFloat(el.style.height) || 0) : (el.id === 'video-panel' ? Math.round(w * 9 / 16) : 0);
+                applyRect(el, { x: parseFloat(el.style.left) || 8, y: parseFloat(el.style.top) || 8, w, h: h || null }, rect);
+            });
+        });
+        const resetBtn = document.getElementById('btn-reset-layout');
+        if (resetBtn) resetBtn.addEventListener('click', () => {
+            try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+            defaultLayout();
+            saveLayout();
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', init);
 
 })();

@@ -24,6 +24,7 @@
                     <span class="badge-dot"></span>
                     <span id="connection-text">Sin conexión</span>
                 </div>
+                <button id="btn-reset-layout" class="icon-btn" title="Restaurar posición de ventanas">⤾</button>
                 <button id="btn-theme" class="icon-btn" title="Cambiar tema">🌙</button>
             </div>
         </header>
@@ -64,7 +65,8 @@
                 </div>
 
                 <!-- Video Player -->
-                <div id="video-panel" class="panel-card" style="display:none;">
+                <div id="video-panel" class="win" style="display:none;">
+                    <div class="window-bar"><span class="win-title">🎥 Video</span></div>
                     <div id="video-wrapper">
                         <video id="remote-video" autoplay playsinline></video>
                         <canvas id="face-overlay" style="display:none;"></canvas>
@@ -105,13 +107,14 @@
                             <span id="rec-timer">00:00</span>
                         </div>
                     </div>
+                    <div class="win-resizer"></div>
                 </div>
             </section>
 
-            <!-- Right: Control Panels -->
+            <!-- Right: Control Windows -->
             <aside id="controls-section">
                 <!-- Stats Panel -->
-                <div class="ctrl-panel" id="stats-panel">
+                <div class="ctrl-panel win" id="stats-panel">
                     <div class="ctrl-header">
                         <h3>📊 Monitor de Rendimiento</h3>
                     </div>
@@ -143,10 +146,11 @@
                             </div>
                         </div>
                     </div>
+                    <div class="win-resizer"></div>
                 </div>
 
                 <!-- Camera Controls -->
-                <div class="ctrl-panel" id="camera-ctrl-panel">
+                <div class="ctrl-panel win" id="camera-ctrl-panel">
                     <div class="ctrl-header">
                         <h3>📱 Control de Cámara</h3>
                     </div>
@@ -163,33 +167,36 @@
                             </button>
                         </div>
 
-                        <!-- Resolution -->
-                        <div class="ctrl-group">
-                            <label>Resolución</label>
-                            <div class="btn-group" id="d-res-group">
-                                <button data-value="480p">480p</button>
-                                <button data-value="720p">720p</button>
-                                <button data-value="1080p" class="active">1080p</button>
-                                <button data-value="4k">4K</button>
+                        <div class="ctrl-two-col">
+                            <!-- Resolution -->
+                            <div class="ctrl-group">
+                                <label>Resolución</label>
+                                <div class="btn-group" id="d-res-group">
+                                    <button data-value="480p">480p</button>
+                                    <button data-value="720p">720p</button>
+                                    <button data-value="1080p" class="active">1080p</button>
+                                    <button data-value="4k">4K</button>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- FPS -->
-                        <div class="ctrl-group">
-                            <label>FPS</label>
-                            <div class="btn-group" id="d-fps-group">
-                                <button data-value="15">15</button>
-                                <button data-value="30">30</button>
-                                <button data-value="60" class="active">60</button>
+                            <!-- FPS -->
+                            <div class="ctrl-group">
+                                <label>FPS</label>
+                                <div class="btn-group" id="d-fps-group">
+                                    <button data-value="15">15</button>
+                                    <button data-value="30">30</button>
+                                    <button data-value="60" class="active">60</button>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <div class="win-resizer"></div>
                 </div>
 
                 <!-- Image Controls -->
-                <div class="ctrl-panel" id="image-ctrl-panel">
+                <div class="ctrl-panel win" id="image-ctrl-panel">
                     <div class="ctrl-header">
-                        <h3>🎨 Imagen</h3>
+                        <h3>🖼️ Imagen</h3>
                     </div>
                     <div class="ctrl-body">
                         <!-- Orientation (Camo-style lock) -->
@@ -235,6 +242,25 @@
                             <label>Saturación <span id="d-saturation-val">100%</span></label>
                             <input type="range" id="d-saturation" min="0" max="300" value="100">
                         </div>
+                    </div>
+                    <div class="win-resizer"></div>
+                </div>
+
+                <!-- Beauty Controls -->
+                <div class="ctrl-panel win" id="beauty-panel">
+                    <div class="ctrl-header">
+                        <h3>✨ Belleza</h3>
+                    </div>
+                    <div class="ctrl-body">
+                        <!-- On/off -->
+                        <div class="ctrl-group">
+                            <label>Filtro de belleza</label>
+                            <label class="switch-row">
+                                <input type="checkbox" id="d-beauty-check" checked>
+                                <span class="switch-track"><span class="switch-thumb"></span></span>
+                                <span class="switch-label" id="d-beauty-label">Activado</span>
+                            </label>
+                        </div>
 
                         <!-- Skin smoothing -->
                         <div class="ctrl-group">
@@ -248,15 +274,6 @@
                             <input type="range" id="d-glow" min="0" max="100" value="0">
                         </div>
 
-                        <!-- Face mode -->
-                        <div class="ctrl-group">
-                            <label>Modo de suavizado</label>
-                            <div class="btn-group" id="d-face-mode-group">
-                                <button data-value="frame" class="active">Todo el encuadre</button>
-                                <button data-value="face">Solo rostro 🔎</button>
-                            </div>
-                        </div>
-
                         <!-- Processing destination -->
                         <div class="ctrl-group">
                             <label>Procesar en</label>
@@ -266,10 +283,11 @@
                             </div>
                         </div>
                     </div>
+                    <div class="win-resizer"></div>
                 </div>
 
                 <!-- Overlays Panel -->
-                <div class="ctrl-panel" id="overlay-panel">
+                <div class="ctrl-panel win" id="overlay-panel">
                     <div class="ctrl-header">
                         <h3>🎨 Overlays</h3>
                     </div>
@@ -292,10 +310,11 @@
                             </label>
                         </div>
                     </div>
+                    <div class="win-resizer"></div>
                 </div>
 
                 <!-- Virtual Camera -->
-                <div class="ctrl-panel" id="vcam-panel">
+                <div class="ctrl-panel win" id="vcam-panel">
                     <div class="ctrl-header">
                         <h3>🎥 Cámara Virtual</h3>
                     </div>
@@ -306,6 +325,7 @@
                         </button>
                         <div id="vcam-status" class="obs-status">Selecciona "PhoneCam Pro" en tu app de videollamada.</div>
                     </div>
+                    <div class="win-resizer"></div>
                 </div>
             </aside>
         </main>
