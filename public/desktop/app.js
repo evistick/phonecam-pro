@@ -46,7 +46,7 @@
         landPrev: null,
         landTarget: null,
         landT0: 0,
-        landDur: 140,
+        landDur: 55,
         lastHit: 0,
         detCanvas: null,
         detCtx: null,
@@ -307,10 +307,7 @@
                 if (!state.vcamActive || !state.remoteStream) return;
                 state.vcamCtx.drawImage(remoteVideo, 0, 0, w, h);
 if (state.faceMode && state.smooth > 0) {
-                        if (performance.now() - state.lastDet >= 120) {
-                            state.lastDet = performance.now();
-                            detectFaces(state.vcamCanvas);
-                        }
+                        detectFaces(state.vcamCanvas);
                         if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
                             paintSmooth(state.vcamCtx);
                         }
@@ -464,8 +461,8 @@ if (state.faceMode && state.smooth > 0) {
         const w = source.videoWidth || source.width;
         const h = source.videoHeight || source.height;
         if (!state.landmarker || !w || !h) return;
-        const dw = 288;
-        const dh = Math.max(36, Math.round(dw * h / w));
+        const dw = 224;
+        const dh = Math.max(30, Math.round(dw * h / w));
         if (!state.detCanvas) {
             state.detCanvas = document.createElement('canvas');
             state.detCtx = state.detCanvas.getContext('2d', { willReadFrequently: true });
@@ -495,13 +492,14 @@ if (state.faceMode && state.smooth > 0) {
     function getLands() {
         const now = performance.now();
         if (!state.landTarget) return null;
-        if (now - state.lastHit > 400) {
+        if (now - state.lastHit > 130) {
             state.landTarget = null;
             state.landPrev = null;
             state.land = null;
             state.faceLms = false;
             return null;
         }
+        // Near-instant tracking: very short snap so the mask glues to the face
         const prog = Math.min(1, (now - state.landT0) / state.landDur);
         const ease = 1 - Math.pow(1 - prog, 3);
         const t = state.landTarget, p = state.landPrev || t;
@@ -631,7 +629,7 @@ if (state.faceMode && state.smooth > 0) {
             state.smoothLayer.width = w;
             state.smoothLayer.height = h;
         }
-        const mw = Math.round(w / 2), mh = Math.round(h / 2);
+        const mw = Math.round(w / 3), mh = Math.round(h / 3);
         if (!state.maskCanvas) {
             state.maskCanvas = document.createElement('canvas');
             state.maskCtx = state.maskCanvas.getContext('2d');
@@ -695,7 +693,7 @@ if (state.faceMode && state.smooth > 0) {
         }
         const mb = state.maskBlurCtx;
         mb.clearRect(0, 0, mw, mh);
-        mb.filter = 'blur(' + Math.max(6, Math.round(h / 40)) + 'px)';
+        mb.filter = 'blur(' + Math.max(3, Math.round(mh / 40)) + 'px)';
         mb.drawImage(state.maskCanvas, 0, 0);
         mb.filter = 'none';
         m.clearRect(0, 0, mw, mh);
@@ -739,10 +737,7 @@ if (state.faceMode && state.smooth > 0) {
             ov.style.display = 'none';
             return;
         }
-        if (performance.now() - state.lastDet >= 120) {
-            state.lastDet = performance.now();
-            detectFaces(remoteVideo);
-        }
+        detectFaces(remoteVideo);
         const wrap = $('#video-wrapper');
         const r = wrap.getBoundingClientRect();
         const sc = Math.min(r.width / vw, r.height / vh);
