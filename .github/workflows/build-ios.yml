@@ -9,6 +9,8 @@ jobs:
   build-ipa:
     name: Build PhoneCam Pro IPA
     runs-on: macos-14
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -53,6 +55,17 @@ jobs:
           name: PhoneCamPro-ipa
           path: build/PhoneCamPro-unsigned.ipa
           if-no-files-found: error
+
+      - name: Publish IPA as stable release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete test-build --yes 2>/dev/null || true
+          gh release create test-build build/PhoneCamPro-unsigned.ipa \
+            --title "PhoneCam Pro - build de prueba" \
+            --notes "IPA sin firmar para sideload (Sideloadly / AltStore / SideStore). Instalar no requiere Mac." \
+            2>&1 || true
 
       - name: Summary
         run: |
