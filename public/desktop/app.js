@@ -1488,7 +1488,9 @@ if (!state.vcamActive || !state.remoteStream) return;
         const cp = document.getElementById('connect-panel');
         if (!cp || cp.style.display === 'none') return;
         const main = document.getElementById('main').getBoundingClientRect();
-        const w = cp.offsetWidth || 480;
+        const maxW = Math.max(300, main.width - 2 * (260 + 16));
+        const w = clampNum(cp.offsetWidth || 400, Math.min(320, maxW), maxW);
+        cp.style.width = w + 'px';
         const h = cp.offsetHeight || 420;
         cp.style.left = Math.max(8, Math.round((main.width - w) / 2)) + 'px';
         cp.style.top = Math.max(8, Math.round((main.height - h) / 2)) + 'px';
@@ -1570,6 +1572,7 @@ if (!state.vcamActive || !state.remoteStream) return;
                 let best = null;
                 for (let c = 1; c <= items.length; c++) {
                     const colW = clampNum(Math.floor((band - (c - 1) * pad) / c), 260, 480);
+                    if (c * colW + (c - 1) * pad > band) break;
                     for (const it of items) measure(it, colW);
                     const colsTry = [];
                     for (let i = 0; i < c; i++) colsTry.push({ items: [], h: 0 });
@@ -1587,7 +1590,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             };
             // Band-filling variant: stops when a panel no longer fits, so the
             // remainder can flow into the next free band.
-            const packItemsBand = (list, band) => {
+            const packItemsBand = (list, band, capH) => {
                 let best = null;
                 for (let c = 1; c <= list.length; c++) {
                     const colW = clampNum(Math.floor((band - (c - 1) * pad) / c), 260, 480);
@@ -1597,7 +1600,7 @@ if (!state.vcamActive || !state.remoteStream) return;
                     for (let i = 0; i < c; i++) colsTry.push({ items: [], h: 0 });
                     let used = 0;
                     for (const it of list) {
-                        const k = colsTry.findIndex(col => col.h + it.h + pad <= availH);
+                        const k = colsTry.findIndex(col => col.h + it.h + pad <= capH);
                         if (k === -1) break;
                         colsTry[k].items.push(it);
                         colsTry[k].h += it.h + pad;
@@ -1609,11 +1612,11 @@ if (!state.vcamActive || !state.remoteStream) return;
                 if (best) for (const it of list) measure(it, best.colW);
                 return best;
             };
-            const placeCols = (cols, x0) => {
+            const placeCols = (cols, x0, y0) => {
                 let x = x0;
                 for (const col of cols) {
                     const cw = Math.max(...col.items.map(i => i.w));
-                    let y = pad;
+                    let y = y0 || pad;
                     for (const it of col.items) {
                         place(it.el, x, y, it.w);
                         y += it.h + pad;
@@ -1647,31 +1650,43 @@ if (!state.vcamActive || !state.remoteStream) return;
                 }
             } else {
                 // The connect panel floats wherever it is: pack the control panels
-                // into the free bands on either side of it instead of overlapping it.
+                // into the free bands on either side of it (and below it when the
+                // window is narrow) instead of overlapping it.
                 const cp = document.getElementById('connect-panel');
                 const cpOn = cp && cp.style.display !== 'none' && cp.offsetWidth;
-                let didTwoBand = false;
+                let allPlaced = false;
                 if (cpOn) {
                     const cr = cp.getBoundingClientRect();
                     const cpl = cr.left - rect.left, cpr = cr.right - rect.left;
-                    const L = { x: pad, w: cpl - pad * 2 };
-                    const R = { x: cpr + pad, w: rect.width - cpr - pad * 2 };
-                    if (L.w >= 260 && R.w >= 260) {
-                        const order = R.w > L.w ? [R, L] : [L, R];
-                        let remaining = items.slice();
-                        for (const band of order) {
-                            if (!remaining.length) break;
-                            const pack = packItemsBand(remaining, band.w);
-                            if (!pack || !pack.used) continue;
-                            placeCols(pack.cols, band.x);
-                            remaining = remaining.slice(pack.used);
-                        }
-                        didTwoBand = true;
+                    const cpb = cr.bottom - rect.top;
+                    const bands = [];
+                    if (cpl - pad * 2 >= 80) bands.push({ x: pad, y: pad, w: cpl - pad * 2, h: rect.height - pad * 2 });
+                    if (rect.width - cpr - pad * 2 >= 80) bands.push({ x: cpr + pad, y: pad, w: rect.width - cpr - pad * 2, h: rect.height - pad * 2 });
+                    const depth = rect.height - cpb - pad * 2;
+                    if (depth >= 80) bands.push({ x: pad, y: cpb + pad, w: rect.width - pad * 2, h: depth });
+                    bands.sort((a, b) => b.w - a.w || b.h - a.h);
+                    let remaining = items.slice();
+                    for (const band of bands) {
+                        if (!remaining.length) break;
+                        const pack = packItemsBand(remaining, band.w, band.h);
+                        if (!pack || !pack.used) continue;
+                        placeCols(pack.cols, band.x, band.y);
+                        remaining = remaining.slice(pack.used);
                     }
+                    if (!remaining.length) allPlaced = true;
                 }
-                if (!didTwoBand) {
-                    const pack = packItems(colBand);
-                    if (pack) placeCols(pack.cols, pad);
+                if (!allPlaced) {
+                    // Not enough room to keep the floating panel clear: dock it
+                    // top-center and tile the controls below (the area scrolls).
+                    if (cpOn) {
+                        const dockW = cp.offsetWidth || 300;
+                        place(cp, Math.max(8, Math.round((rect.width - dockW) / 2)), pad, dockW);
+                        const pack = packItemsBand(items, rect.width - pad * 2, rect.height - pad * 2);
+                        if (pack && pack.used) placeCols(pack.cols, pad, pad + (cp.offsetHeight || 420) + pad);
+                    } else {
+                        const pack = packItems(colBand);
+                        if (pack) placeCols(pack.cols, pad);
+                    }
                 }
             }
         }

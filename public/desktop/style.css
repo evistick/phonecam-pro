@@ -293,6 +293,24 @@ html, body {
     position: absolute;
     inset: 0;
     pointer-events: none;
+    overflow: auto;
+    scrollbar-width: thin;
+}
+
+#video-section::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+#video-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#video-section::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
 }
 
 #controls-section {
@@ -1259,8 +1277,8 @@ input[type="range"]::-moz-range-thumb {
 /* ─── Responsive ────────────────────────────────────── */
 
 @media (max-width: 900px) {
-    #connect-panel {
-        width: 420px;
+    .connect-content {
+        padding: 20px 22px;
     }
 }
 
