@@ -1,12 +1,12 @@
-﻿/**
- * app.js â€” PhoneCam Pro Desktop Client
+/**
+ * app.js — PhoneCam Pro Desktop Client
  * Handles video reception, recording, screenshots, overlays, and OBS integration
  */
 
 (function () {
     'use strict';
 
-    // â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── State ──────────────────────────────────────────────
     const state = {
         socket: null,
         rtc: null,
@@ -63,7 +63,7 @@
         dest: 'pc'
     };
 
-    // â”€â”€â”€ DOM Elements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── DOM Elements ───────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
     const connectPanel = $('#connect-panel');
     const videoPanel = $('#video-panel');
@@ -77,7 +77,7 @@
     const recordingIndicator = $('#recording-indicator');
     const recTimer = $('#rec-timer');
 
-    // â”€â”€â”€ Initialize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Initialize ─────────────────────────────────────────
     function init() {
         // Floating window layout
         initWindows();
@@ -91,7 +91,7 @@
         });
 
         state.socket.on('connect', () => {
-            console.log('ðŸ”Œ Connected to server');
+            console.log('🔌 Connected to server');
             createRoom();
         });
 
@@ -104,20 +104,20 @@ state.socket.on('peer-joined', (data) => {
             if (data.role === 'mobile') {
                 console.log('📱 Mobile peer joined');
                 updateConnectionBadge('connecting');
-                showToast('📱 Teléfono conectado, iniciando stream...', 'success');
+                showToast('📱 Tel�fono conectado, iniciando stream...', 'success');
                 if (state.dest === 'phone') emitBeautyConfig();
             }
         });
 
         state.socket.on('peer-left', (data) => {
             if (data.role === 'mobile') {
-                console.log('ðŸ“± Mobile peer left');
+                console.log('📱 Mobile peer left');
                 updateConnectionBadge('disconnected');
                 showVideoPanel(false);
                 if (state.vcamActive) {
                     stopVirtualCamera(false);
                 }
-                showToast('ðŸ“± TelÃ©fono desconectado', 'error');
+                showToast('📱 Teléfono desconectado', 'error');
             }
         });
 
@@ -149,12 +149,12 @@ state.socket.on('peer-joined', (data) => {
         setTheme(savedTheme);
     }
 
-    // â”€â”€â”€ Room Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Room Management ────────────────────────────────────
     function createRoom() {
         state.socket.emit('create-room', async (response) => {
             state.roomId = response.roomId;
             roomCode.textContent = response.roomId;
-            console.log('ðŸ  Room created:', response.roomId);
+            console.log('🏠 Room created:', response.roomId);
 
             // Fetch QR code
             try {
@@ -175,7 +175,7 @@ state.socket.on('peer-joined', (data) => {
         });
     }
 
-    // â”€â”€â”€ WebRTC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── WebRTC ─────────────────────────────────────────────
     function setupWebRTC() {
         // Clean previous connection
         if (state.rtc) {
@@ -188,7 +188,7 @@ state.socket.on('peer-joined', (data) => {
         state.rtc.createPeerConnection();
 
         state.rtc.onRemoteStream = (stream) => {
-            console.log('ðŸ“º Remote stream received');
+            console.log('📺 Remote stream received');
             state.remoteStream = stream;
             remoteVideo.srcObject = stream;
             showVideoPanel(true);
@@ -210,11 +210,11 @@ state.socket.on('peer-joined', (data) => {
         };
     }
 
-    // â”€â”€â”€ Virtual Camera (PhoneCam Pro device) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Virtual Camera (PhoneCam Pro device) ────────────────
     // The desktop captures the remote stream, converts RGBA -> NV12
     // and feeds it to the server, which writes it to the DirectShow
     // filter's shared-memory queue. The device then appears as
-    // "PhoneCam Pro" in Teams, Zoom, Meet, etc. â€” just like Camo.
+    // "PhoneCam Pro" in Teams, Zoom, Meet, etc. — just like Camo.
     const VCAM_MAX_W = 1280;
     const VCAM_MAX_H = 720;
     const VCAM_FPS = 30;
@@ -270,7 +270,7 @@ state.socket.on('peer-joined', (data) => {
             return;
         }
         if (!state.remoteStream || !remoteVideo.videoWidth) {
-            showToast('ðŸ“± Conecta tu telÃ©fono primero', 'error');
+            showToast('📱 Conecta tu teléfono primero', 'error');
             return;
         }
 
@@ -284,7 +284,7 @@ state.socket.on('peer-joined', (data) => {
             const w = Math.max(2, Math.round((srcW * scale) / 2) * 2);
             const h = Math.max(2, Math.round((srcH * scale) / 2) * 2);
 
-            vcamStatus('Preparando cÃ¡mara virtual...', 'working');
+            vcamStatus('Preparando cámara virtual...', 'working');
 
             const res = await fetch('/api/virtualcam', {
                 method: 'POST',
@@ -293,7 +293,7 @@ state.socket.on('peer-joined', (data) => {
             });
             const data = await res.json();
             if (!res.ok || !data.ok) {
-                throw new Error(data.error || 'Error al iniciar la cÃ¡mara virtual');
+                throw new Error(data.error || 'Error al iniciar la cámara virtual');
             }
 
             state.vcamActive = true;
@@ -331,16 +331,16 @@ if (!state.vcamActive || !state.remoteStream) return;
                 });
             }, interval);
 
-            btn.innerHTML = 'â¹ï¸ Detener cÃ¡mara virtual';
+            btn.innerHTML = '⏹️ Detener cámara virtual';
             btn.classList.add('active');
             vcamStatus(
-                'âœ… CÃ¡mara virtual activa (' + w + 'x' + h + '). Selecciona "PhoneCam Pro" en Teams/Zoom/Meet.',
+                '✅ Cámara virtual activa (' + w + 'x' + h + '). Selecciona "PhoneCam Pro" en Teams/Zoom/Meet.',
                 'success'
             );
-            showToast('ðŸŽ¥ CÃ¡mara virtual iniciada', 'success');
+            showToast('🎥 Cámara virtual iniciada', 'success');
         } catch (err) {
             console.error('Virtual camera error:', err);
-            vcamStatus('âŒ ' + err.message, 'error');
+            vcamStatus('❌ ' + err.message, 'error');
         } finally {
             btn.disabled = false;
         }
@@ -356,16 +356,16 @@ if (!state.vcamActive || !state.remoteStream) return;
 
         const btn = $('#btn-vcam');
         if (btn) {
-            btn.innerHTML = 'ðŸŽ¥ Activar cÃ¡mara virtual';
+            btn.innerHTML = '🎥 Activar cámara virtual';
             btn.classList.remove('active');
         }
-        vcamStatus('CÃ¡mara virtual detenida. Selecciona "PhoneCam Pro" en tu app de videollamada.', '');
+        vcamStatus('Cámara virtual detenida. Selecciona "PhoneCam Pro" en tu app de videollamada.', '');
         if (showMsg) {
-            showToast('â¹ï¸ CÃ¡mara virtual detenida', 'error');
+            showToast('⏹️ Cámara virtual detenida', 'error');
         }
     }
 
-    // â”€â”€â”€ Skin Smoothing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Skin Smoothing ─────────────────────────────────────
     function smoothAlpha() {
         return 0.25 + (state.smooth / 100) * 0.5;
     }
@@ -422,12 +422,12 @@ if (!state.vcamActive || !state.remoteStream) return;
         ctx.restore();
     }
 
-    // â”€â”€â”€ Face-Aware Smoothing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Face-Aware Smoothing ───────────────────────────────
     async function ensureFaceDetector() {
         if (state.landmarker) return true;
         if (state.faceLoading) return false;
         state.faceLoading = true;
-        showToast('â³ Cargando detector facialâ€¦', '');
+        showToast('⏳ Cargando detector facial…', '');
         try {
             const vision = await import('./vendor/mediapipe/vision_bundle.mjs');
             const files = await vision.FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');
@@ -439,11 +439,11 @@ if (!state.vcamActive || !state.remoteStream) return;
                 runningMode: 'VIDEO',
                 numFaces: 2
             });
-            showToast('âœ… Detector facial listo', 'success');
+            showToast('✅ Detector facial listo', 'success');
             return true;
         } catch (err) {
             console.error('Face detector load failed:', err);
-            showToast('âŒ No se pudo cargar el detector facial', 'error');
+            showToast('❌ No se pudo cargar el detector facial', 'error');
             state.faceMode = true;
             applyPreviewFilter();
             return false;
@@ -792,8 +792,17 @@ if (!state.vcamActive || !state.remoteStream) return;
         if (ov) ov.style.display = 'none';
     }
 
-    // â”€â”€â”€ UI Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── UI Controls ────────────────────────────────────────
     function setupUIControls() {
+        // macOS slider: paint the filled portion via a CSS custom property
+        const fillSlider = (el) => {
+            const min = parseFloat(el.min) || 0;
+            const max = parseFloat(el.max) || 100;
+            const val = parseFloat(el.value) || 0;
+            const pct = clampNum((val - min) / (max - min) * 100, 0, 100);
+            el.style.setProperty('--p', pct + '%');
+        };
+
         // Theme toggle
         $('#btn-theme').addEventListener('click', () => {
             setTheme(state.theme === 'dark' ? 'light' : 'dark');
@@ -802,12 +811,12 @@ if (!state.vcamActive || !state.remoteStream) return;
         // Copy buttons
         $('#btn-copy-code').addEventListener('click', () => {
             copyToClipboard(roomCode.textContent);
-            showToast('ðŸ“‹ CÃ³digo copiado', 'success');
+            showToast('📋 Código copiado', 'success');
         });
 
         $('#btn-copy-url').addEventListener('click', () => {
             copyToClipboard(mobileUrl.textContent);
-            showToast('ðŸ“‹ URL copiada', 'success');
+            showToast('📋 URL copiada', 'success');
         });
 
         // Virtual camera toggle
@@ -832,7 +841,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             state.socket.emit('flash-toggle');
             const btn = $('#d-btn-flash');
             btn.classList.toggle('flash-on', state.flashOn);
-            btn.innerHTML = state.flashOn ? '<span>ðŸ’¡</span> Flash' : '<span>âš¡</span> Flash';
+            btn.innerHTML = state.flashOn ? '<span>💡</span> Flash' : '<span>⚡</span> Flash';
         });
 
         $('#d-btn-mic').addEventListener('click', () => {
@@ -840,7 +849,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             state.socket.emit('mic-toggle');
             const btn = $('#d-btn-mic');
             btn.classList.toggle('active', state.micOn);
-            btn.innerHTML = state.micOn ? '<span>ðŸŽ¤</span> Mic' : '<span>ðŸ”‡</span> Mic';
+            btn.innerHTML = state.micOn ? '<span>🎤</span> Mic' : '<span>🔇</span> Mic';
         });
 
         // Resolution buttons
@@ -885,18 +894,21 @@ if (!state.vcamActive || !state.remoteStream) return;
         $('#d-brightness').addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             $('#d-brightness-val').textContent = val + '%';
+            fillSlider(e.target);
             state.socket.emit('brightness-change', { value: val });
         });
 
         $('#d-contrast').addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             $('#d-contrast-val').textContent = val + '%';
+            fillSlider(e.target);
             state.socket.emit('contrast-change', { value: val });
         });
 
         $('#d-saturation').addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             $('#d-saturation-val').textContent = val + '%';
+            fillSlider(e.target);
             state.socket.emit('saturation-change', { value: val });
         });
 
@@ -904,6 +916,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         $('#d-smooth').addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             $('#d-smooth-val').textContent = val + '%';
+            fillSlider(e.target);
             state.smooth = val;
             applyPreviewFilter();
             if (state.smooth > 0 && state.beautyEnabled) startPreviewLoop();
@@ -915,6 +928,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         $('#d-glow').addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             $('#d-glow-val').textContent = val + '%';
+            fillSlider(e.target);
             state.glow = val;
             applyPreviewFilter();
             if (state.dest === 'phone') emitBeautyConfig();
@@ -995,7 +1009,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         });
     }
 
-    // â”€â”€â”€ Video Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Video Controls ─────────────────────────────────────
     function toggleFullscreen() {
         const wrapper = $('#video-wrapper');
         if (!document.fullscreenElement) {
@@ -1049,7 +1063,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         $('#btn-grid').classList.toggle('active', state.gridVisible);
     }
 
-    // â”€â”€â”€ Screenshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Screenshot ─────────────────────────────────────────
     function takeScreenshot() {
         if (!state.remoteStream) return;
 
@@ -1087,7 +1101,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         link.href = canvas.toDataURL('image/png');
         link.click();
 
-        showToast('ðŸ“· Captura guardada', 'success');
+        showToast('📷 Captura guardada', 'success');
 
         // Flash effect
         const flash = document.createElement('div');
@@ -1110,7 +1124,7 @@ if (!state.vcamActive || !state.remoteStream) return;
     `;
     document.head.appendChild(flashStyle);
 
-    // â”€â”€â”€ Recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Recording ──────────────────────────────────────────
     function toggleRecording() {
         if (state.recording) {
             stopRecording();
@@ -1135,7 +1149,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         try {
             state.mediaRecorder = new MediaRecorder(state.remoteStream, options);
         } catch (e) {
-            showToast('Error al iniciar grabaciÃ³n', 'error');
+            showToast('Error al iniciar grabación', 'error');
             return;
         }
 
@@ -1153,7 +1167,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             link.href = url;
             link.click();
             URL.revokeObjectURL(url);
-            showToast('ðŸŽ¬ GrabaciÃ³n guardada', 'success');
+            showToast('🎬 Grabación guardada', 'success');
         };
 
         state.mediaRecorder.start(1000); // Collect data every second
@@ -1163,7 +1177,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         // UI
         recordingIndicator.style.display = 'flex';
         $('#btn-record').classList.add('active');
-        $('#btn-record').innerHTML = 'â¹ï¸';
+        $('#btn-record').innerHTML = '⏹️';
 
         // Timer
         state.recordTimerInterval = setInterval(() => {
@@ -1182,19 +1196,19 @@ if (!state.vcamActive || !state.remoteStream) return;
         state.recording = false;
         recordingIndicator.style.display = 'none';
         $('#btn-record').classList.remove('active');
-        $('#btn-record').innerHTML = 'âºï¸';
+        $('#btn-record').innerHTML = '⏺️';
 
         if (state.recordTimerInterval) {
             clearInterval(state.recordTimerInterval);
         }
     }
 
-    // â”€â”€â”€ Stats & Status Updates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Stats & Status Updates ─────────────────────────────
     function updateStats(stats) {
         if (!stats) return;
 
         const resolution = stats.video.width
-            ? `${stats.video.width}Ã—${stats.video.height}`
+            ? `${stats.video.width}×${stats.video.height}`
             : '--';
         const fps = stats.video.fps ? Math.round(stats.video.fps) : '--';
         const bitrate = stats.video.bitrate
@@ -1223,12 +1237,12 @@ if (!state.vcamActive || !state.remoteStream) return;
 
     function updateBattery(data) {
         if (!data) return;
-        const icon = data.charging ? 'ðŸ”Œ' : (data.level > 20 ? 'ðŸ”‹' : 'ðŸª«');
+        const icon = data.charging ? '🔌' : (data.level > 20 ? '🔋' : '🪫');
         $('#d-stat-battery').textContent = `${icon} ${data.level}%`;
     }
 
     function updateCapabilities(caps) {
-        console.log('ðŸ“± Camera capabilities:', caps);
+        console.log('📱 Camera capabilities:', caps);
     }
 
     function updateCameraStatus(status) {
@@ -1236,7 +1250,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             state.flashOn = status.flash;
             const btn = $('#d-btn-flash');
             btn.classList.toggle('flash-on', state.flashOn);
-            btn.innerHTML = state.flashOn ? '<span>ðŸ’¡</span> Flash' : '<span>âš¡</span> Flash';
+            btn.innerHTML = state.flashOn ? '<span>💡</span> Flash' : '<span>⚡</span> Flash';
         }
 
         if (status.resolution) {
@@ -1258,15 +1272,15 @@ if (!state.vcamActive || !state.remoteStream) return;
         }
     }
 
-    // â”€â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Theme ──────────────────────────────────────────────
     function setTheme(theme) {
         state.theme = theme;
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('phonecam-theme', theme);
-        $('#btn-theme').textContent = theme === 'dark' ? 'ðŸŒ™' : 'â˜€ï¸';
+        $('#btn-theme').textContent = theme === 'dark' ? '🌙' : '☀️';
     }
 
-    // â”€â”€â”€ UI Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── UI Helpers ─────────────────────────────────────────
     function showVideoPanel(show) {
         connectPanel.style.display = show ? 'none' : 'block';
         videoPanel.style.display = show ? 'block' : 'none';
@@ -1279,7 +1293,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         const labels = {
             connected: 'Conectado',
             connecting: 'Conectando...',
-            disconnected: 'Sin conexiÃ³n'
+            disconnected: 'Sin conexión'
         };
         connectionText.textContent = labels[status] || status;
     }
@@ -1316,7 +1330,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         }, 3000);
     }
 
-    // â”€â”€â”€ Keyboard Shortcuts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Keyboard Shortcuts ─────────────────────────────────
     document.addEventListener('keydown', (e) => {
         // Only when not typing in an input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -1355,11 +1369,16 @@ if (!state.vcamActive || !state.remoteStream) return;
         }
     });
 
-    // â”€â”€â”€ Start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Start ──────────────────────────────────────────────
     // ─── Window Management ─────────────────────────────────
     const LAYOUT_KEY = 'phonecam-layout';
 
     function getWindowArea() {
+        const main = document.getElementById('main');
+        if (main) {
+            const r = main.getBoundingClientRect();
+            return { w: r.width, h: r.height };
+        }
         const header = document.getElementById('header');
         const hh = header ? header.offsetHeight : 0;
         return { w: window.innerWidth, h: window.innerHeight - hh };
@@ -1566,29 +1585,33 @@ if (!state.vcamActive || !state.remoteStream) return;
                 }
                 return best;
             };
-
-            let pack = packItems(colBand);
-            if (pack) {
-                // If several columns are needed but they don't fit horizontally,
-                // shrink the video to make room, then re-pack.
-                if (videoOn && pack.cols.length > 1 && colTotalW(pack.cols) > colBand) {
-                    const vw2 = clampNum(vw - (colTotalW(pack.cols) - colBand), 360, vw);
-                    const newBand = rect.width - pad * 2 - vw2 - pad;
-                    if (newBand > pad) {
-                        const re = packItems(newBand);
-                        if (re && colTotalW(re.cols) <= newBand) {
-                            vw = vw2;
-                            const videoRight = (parseFloat(videoEl.style.left) || pad) > (rect.width - vw) / 2;
-                            colX = videoRight ? pad : pad + vw + pad;
-                            videoEl.style.height = Math.round(clampNum(vw * 9 / 16, 120, rect.height - pad * 2)) + 'px';
-                            if (videoRight) place(videoEl, rect.width - pad - vw, pad, vw);
-                            else place(videoEl, pad, pad, vw);
-                            pack = re;
-                        }
+            // Band-filling variant: stops when a panel no longer fits, so the
+            // remainder can flow into the next free band.
+            const packItemsBand = (list, band) => {
+                let best = null;
+                for (let c = 1; c <= list.length; c++) {
+                    const colW = clampNum(Math.floor((band - (c - 1) * pad) / c), 260, 480);
+                    if (c * colW + (c - 1) * pad > band) break;
+                    for (const it of list) measure(it, colW);
+                    const colsTry = [];
+                    for (let i = 0; i < c; i++) colsTry.push({ items: [], h: 0 });
+                    let used = 0;
+                    for (const it of list) {
+                        const k = colsTry.findIndex(col => col.h + it.h + pad <= availH);
+                        if (k === -1) break;
+                        colsTry[k].items.push(it);
+                        colsTry[k].h += it.h + pad;
+                        used++;
                     }
+                    best = { cols: colsTry, colW, used };
+                    if (used === list.length) break;
                 }
-                let x = colX;
-                for (const col of pack.cols) {
+                if (best) for (const it of list) measure(it, best.colW);
+                return best;
+            };
+            const placeCols = (cols, x0) => {
+                let x = x0;
+                for (const col of cols) {
                     const cw = Math.max(...col.items.map(i => i.w));
                     let y = pad;
                     for (const it of col.items) {
@@ -1597,6 +1620,59 @@ if (!state.vcamActive || !state.remoteStream) return;
                     }
                     x += cw + pad;
                 }
+            };
+
+            if (videoOn) {
+                let pack = packItems(colBand);
+                if (pack) {
+                    // If several columns are needed but they don't fit horizontally,
+                    // shrink the video to make room, then re-pack.
+                    if (pack.cols.length > 1 && colTotalW(pack.cols) > colBand) {
+                        const vw2 = clampNum(vw - (colTotalW(pack.cols) - colBand), 360, vw);
+                        const newBand = rect.width - pad * 2 - vw2 - pad;
+                        if (newBand > pad) {
+                            const re = packItems(newBand);
+                            if (re && colTotalW(re.cols) <= newBand) {
+                                vw = vw2;
+                                const videoRight = (parseFloat(videoEl.style.left) || pad) > (rect.width - vw) / 2;
+                                colX = videoRight ? pad : pad + vw + pad;
+                                videoEl.style.height = Math.round(clampNum(vw * 9 / 16, 120, rect.height - pad * 2)) + 'px';
+                                if (videoRight) place(videoEl, rect.width - pad - vw, pad, vw);
+                                else place(videoEl, pad, pad, vw);
+                                pack = re;
+                            }
+                        }
+                    }
+                    placeCols(pack.cols, colX);
+                }
+            } else {
+                // The connect panel floats wherever it is: pack the control panels
+                // into the free bands on either side of it instead of overlapping it.
+                const cp = document.getElementById('connect-panel');
+                const cpOn = cp && cp.style.display !== 'none' && cp.offsetWidth;
+                let didTwoBand = false;
+                if (cpOn) {
+                    const cr = cp.getBoundingClientRect();
+                    const cpl = cr.left - rect.left, cpr = cr.right - rect.left;
+                    const L = { x: pad, w: cpl - pad * 2 };
+                    const R = { x: cpr + pad, w: rect.width - cpr - pad * 2 };
+                    if (L.w >= 260 && R.w >= 260) {
+                        const order = R.w > L.w ? [R, L] : [L, R];
+                        let remaining = items.slice();
+                        for (const band of order) {
+                            if (!remaining.length) break;
+                            const pack = packItemsBand(remaining, band.w);
+                            if (!pack || !pack.used) continue;
+                            placeCols(pack.cols, band.x);
+                            remaining = remaining.slice(pack.used);
+                        }
+                        didTwoBand = true;
+                    }
+                }
+                if (!didTwoBand) {
+                    const pack = packItems(colBand);
+                    if (pack) placeCols(pack.cols, pad);
+                }
             }
         }
     }
@@ -1604,6 +1680,36 @@ if (!state.vcamActive || !state.remoteStream) return;
     function raiseWin(el) {
         document.querySelectorAll('.win').forEach(w => w.classList.remove('z-top'));
         el.classList.add('z-top');
+    }
+
+    // Magnetic snapping: near edges of the app area or of sibling windows,
+    // the dragged window snaps to alignment (like macOS window movement).
+    function snapDrag(x, y, el, main) {
+        const w = el.offsetWidth, h = el.offsetHeight;
+        const T = 9;
+        let sx = x, sy = y;
+        const edgeX = [8, main.width - w - 8];
+        for (const ex of edgeX) if (Math.abs(ex - x) <= T) { sx = ex; break; }
+        const edgeY = [8, main.height - h - 8];
+        for (const ey of edgeY) if (Math.abs(ey - y) <= T) { sy = ey; break; }
+        document.querySelectorAll('.win').forEach(ob => {
+            if (ob === el || !ob.id || ob.style.display === 'none' || !ob.offsetWidth) return;
+            const r = ob.getBoundingClientRect();
+            const ol = r.left - main.left, ot = r.top - main.top;
+            const vertHit = y < ot + r.height + T && y + h > ot - T;
+            if (vertHit) {
+                const tx = [ol - w - 8, ol, ol + r.width + 8];
+                for (const t of tx) if (Math.abs(t - x) <= T) { sx = t; break; }
+            }
+            const horizHit = x < ol + r.width + T && x + w > ol - T;
+            if (horizHit) {
+                const ty = [ot - h - 8, ot, ot + r.height + 8];
+                for (const t of ty) if (Math.abs(t - y) <= T) { sy = t; break; }
+            }
+        });
+        sx = clampNum(sx, 8, Math.max(8, main.width - w - 8));
+        sy = clampNum(sy, 8, Math.max(8, main.height - h - 8));
+        return { x: sx, y: sy };
     }
 
     function bindWindowDrag(el) {
@@ -1615,20 +1721,29 @@ if (!state.vcamActive || !state.remoteStream) return;
             document.getElementById('main').classList.remove('arranging');
             raiseWin(el);
             const rect = el.getBoundingClientRect();
-            const mainRect = document.getElementById('main').getBoundingClientRect();
+            const mainEl = document.getElementById('main');
+            const mainRect = mainEl.getBoundingClientRect();
             const dx = e.clientX - rect.left;
             const dy = e.clientY - rect.top;
             let moved = false;
+            try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+            document.body.classList.add('dragging');
+            el.classList.add('win-dragging');
             const onMove = (ev) => {
                 if (Math.abs(ev.clientX - e.clientX) > 4 || Math.abs(ev.clientY - e.clientY) > 4) moved = true;
-                const x = clampNum(ev.clientX - dx - mainRect.left, 8, mainRect.width - el.offsetWidth - 8);
-                const y = clampNum(ev.clientY - dy - mainRect.top, 8, mainRect.height - el.offsetHeight - 8);
-                el.style.left = x + 'px';
-                el.style.top = y + 'px';
+                if (!moved) return;
+                const bx = clampNum(ev.clientX - dx - mainRect.left, 8, mainRect.width - el.offsetWidth - 8);
+                const by = clampNum(ev.clientY - dy - mainRect.top, 8, mainRect.height - el.offsetHeight - 8);
+                const s = snapDrag(bx, by, el, mainRect);
+                el.style.left = s.x + 'px';
+                el.style.top = s.y + 'px';
             };
             const onUp = () => {
+                document.body.classList.remove('dragging');
+                el.classList.remove('win-dragging');
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
+                try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
                 if (moved) {
                     if (el.id !== 'connect-panel') autoArrange(true);
                     document.getElementById('main').classList.remove('arranging');
@@ -1656,6 +1771,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             const top = parseFloat(el.style.top) || 0;
             const minW = el.id === 'video-panel' ? 360 : 240;
             const minH = el.id === 'video-panel' ? 200 : 90;
+            try { resizer.setPointerCapture(e.pointerId); } catch (err) {}
             const onMove = (ev) => {
                 const w = clampNum(startW + (ev.clientX - rect.left), minW, mainRect.width - left - 8);
                 const h = clampNum(startH + (ev.clientY - rect.top), minH, mainRect.height - top - 8);
@@ -1665,6 +1781,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             const onUp = () => {
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
+                try { resizer.releasePointerCapture(e.pointerId); } catch (err) {}
                 saveLayout();
             };
             window.addEventListener('pointermove', onMove);
