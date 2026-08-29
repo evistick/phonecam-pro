@@ -40,9 +40,6 @@
     --glass-header: rgba(255, 255, 255, 0.055);
     --thumb: #f2f2f7;
     --track: rgba(255, 255, 255, 0.16);
-    --traffic-red: #ff5f57;
-    --traffic-yellow: #febc2e;
-    --traffic-green: #28c840;
     --wallpaper:
         radial-gradient(44rem 36rem at 16% 12%, rgba(10, 132, 255, 0.17), transparent 60%),
         radial-gradient(40rem 32rem at 84% 82%, rgba(175, 82, 222, 0.15), transparent 60%),
@@ -74,9 +71,6 @@
     --glass-header: rgba(0, 0, 0, 0.04);
     --thumb: #33333a;
     --track: rgba(0, 0, 0, 0.14);
-    --traffic-red: #ff6058;
-    --traffic-yellow: #ffbd2e;
-    --traffic-green: #28c840;
     --wallpaper:
         radial-gradient(44rem 36rem at 16% 12%, rgba(0, 122, 255, 0.16), transparent 60%),
         radial-gradient(40rem 32rem at 84% 82%, rgba(205, 104, 199, 0.15), transparent 60%),
@@ -140,50 +134,14 @@ html, body {
     border-bottom: 1px solid var(--border);
     -webkit-user-select: none;
     user-select: none;
+    -webkit-app-region: drag;
 }
 
-/* macOS traffic light buttons */
-.mac-lights {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    gap: 8px;
+#header .header-right button,
+#header .badge,
+#header .header-right .win-caption {
+    -webkit-app-region: no-drag;
 }
-
-.light {
-    display: block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    position: relative;
-    box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18);
-}
-
-.light.red { background: var(--traffic-red); }
-.light.yellow { background: var(--traffic-yellow); }
-.light.green { background: var(--traffic-green); }
-
-.light::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
-    color: rgba(0, 0, 0, 0.55);
-    opacity: 0;
-}
-
-.light.red::after { content: '\00d7'; font-size: 12px; }
-.light.yellow::after { content: '\2013'; }
-.light.green::after { content: '\21f9'; font-size: 11px; }
-
-.light:hover::after { opacity: 1; }
 
 .header-title {
     position: absolute;
@@ -280,6 +238,40 @@ html, body {
     border-color: var(--border-active);
 }
 
+/* Embedded Windows caption buttons (minimize / maximize / close) */
+.win-caption {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 2px;
+}
+
+.caption-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.caption-btn:hover {
+    background: rgba(127, 127, 127, 0.18);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.caption-close:hover {
+    background: var(--danger);
+    border-color: transparent;
+    color: #fff;
+}
+
 /* ─── Main Layout ───────────────────────────────────── */
 
 #main {
@@ -339,12 +331,14 @@ html, body {
     background: rgba(255, 255, 255, 0.09);
 }
 
-/* While dragging: dim the other windows like a real desktop */
-body.dragging {
+/* While dragging or resizing: keep it instant (no layout transitions) */
+body.dragging,
+body.resizing {
     cursor: grabbing;
 }
 
-body.dragging .win {
+body.dragging .win,
+body.resizing .win {
     transition: none;
 }
 
@@ -361,10 +355,10 @@ body.dragging .win:not(.win-dragging) {
 
 #main.arranging .win {
     transition:
-        left 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-        top 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-        width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-        height 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+        left 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+        top 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+        width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+        height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .win-resizer {
@@ -410,17 +404,6 @@ body.dragging .win:not(.win-dragging) {
     align-items: center;
     gap: 9px;
     flex-shrink: 0;
-}
-
-.window-bar::before {
-    content: '';
-    width: 46px;
-    height: 12px;
-    flex-shrink: 0;
-    background:
-        radial-gradient(circle at 6.5px 6px, var(--traffic-red) 4.5px, rgba(0, 0, 0, 0) 5.5px),
-        radial-gradient(circle at 22.5px 6px, var(--traffic-yellow) 4.5px, rgba(0, 0, 0, 0) 5.5px),
-        radial-gradient(circle at 38.5px 6px, var(--traffic-green) 4.5px, rgba(0, 0, 0, 0) 5.5px);
 }
 
 .window-bar:active {
@@ -820,17 +803,6 @@ body.dragging .win:not(.win-dragging) {
 
 .ctrl-header:active {
     cursor: grabbing;
-}
-
-.ctrl-header::before {
-    content: '';
-    width: 46px;
-    height: 12px;
-    flex-shrink: 0;
-    background:
-        radial-gradient(circle at 6.5px 6px, var(--traffic-red) 4.5px, rgba(0, 0, 0, 0) 5.5px),
-        radial-gradient(circle at 22.5px 6px, var(--traffic-yellow) 4.5px, rgba(0, 0, 0, 0) 5.5px),
-        radial-gradient(circle at 38.5px 6px, var(--traffic-green) 4.5px, rgba(0, 0, 0, 0) 5.5px);
 }
 
 .ctrl-header h3 {

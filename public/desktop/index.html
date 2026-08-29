@@ -11,13 +11,8 @@
 </head>
 <body>
     <div id="app">
-        <!-- Header (macOS title bar) -->
+        <!-- Header -->
         <header id="header">
-            <div class="mac-lights">
-                <span class="light red" title="Cerrar"></span>
-                <span class="light yellow" title="Minimizar"></span>
-                <span class="light green" title="Zoom"></span>
-            </div>
             <div class="header-title">
                 <span class="logo-icon">📸</span>
                 <span class="logo-text">PhoneCam <span class="pro">Pro</span></span>
@@ -29,6 +24,17 @@
                 </div>
                 <button id="btn-reset-layout" class="icon-btn" title="Restaurar posición de ventanas">⤾</button>
                 <button id="btn-theme" class="icon-btn" title="Cambiar tema">🌙</button>
+                <div class="win-caption">
+                    <button class="caption-btn" id="btn-win-min" title="Minimizar">
+                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4.5" width="10" height="1" fill="currentColor"/></svg>
+                    </button>
+                    <button class="caption-btn" id="btn-win-max" title="Maximizar">
+                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg>
+                    </button>
+                    <button class="caption-btn caption-close" id="btn-win-close" title="Cerrar">
+                        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L9 9 M9 1 L1 9" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>
+                    </button>
+                </div>
             </div>
         </header>
 

@@ -147,6 +147,9 @@ state.socket.on('peer-joined', (data) => {
         // Theme
         const savedTheme = localStorage.getItem('phonecam-theme') || 'dark';
         setTheme(savedTheme);
+
+        // Window caption controls (embedded in the macOS-style header)
+        initWindowControls();
     }
 
     // ─── Room Management ────────────────────────────────────
@@ -1390,11 +1393,13 @@ if (!state.vcamActive || !state.remoteStream) return;
         const isVideo = el.id === 'video-panel';
         const minW = isVideo ? 360 : 240;
         const minH = isVideo ? 200 : 90;
-        const w = clampNum(r.w, minW, Math.max(minW, rect.width - 16));
+        const maxW = isVideo ? Math.max(minW, Math.floor(rect.width / 2)) : Math.max(minW, rect.width - 16);
+        const maxH = isVideo ? Math.max(minH, Math.floor(rect.height / 2)) : Math.max(minH, rect.height - 16);
+        const w = clampNum(r.w, minW, maxW);
         const hExplicit = !!r.h;
         let h;
         if (hExplicit) {
-            h = clampNum(r.h, minH, Math.max(minH, rect.height - 16));
+            h = clampNum(r.h, minH, maxH);
         } else if (isVideo) {
             h = Math.round(w * 9 / 16);
         } else {
@@ -1413,7 +1418,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         const area = getWindowArea();
         const pad = 16;
         const panelW = Math.min(470, Math.max(300, Math.round((area.w - pad) * 0.34)));
-        const videoW = Math.max(420, area.w - panelW - pad * 3);
+        const videoW = Math.max(420, Math.min(area.w - panelW - pad * 3, Math.floor(area.w / 2)));
         const videoH = Math.max(236, Math.round(videoW * 9 / 16));
         const assign = (id, x, y, w, h) => {
             const el = document.getElementById(id);
@@ -1465,6 +1470,10 @@ if (!state.vcamActive || !state.remoteStream) return;
             if (el.id === 'connect-panel') {
                 el.style.width = clampNum(r.w, 320, Math.max(320, rect.width - 16)) + 'px';
                 if (r.h) el.style.height = r.h + 'px';
+                else el.style.height = '';
+            } else if (el.id === 'video-panel') {
+                el.style.width = clampNum(r.w, 360, Math.max(360, Math.floor(rect.width / 2))) + 'px';
+                if (r.h) el.style.height = Math.min(r.h, Math.floor(rect.height / 2)) + 'px';
                 else el.style.height = '';
             } else {
                 el.style.width = clampNum(r.w, 240, Math.max(240, rect.width - 16)) + 'px';
@@ -1524,8 +1533,8 @@ if (!state.vcamActive || !state.remoteStream) return;
 
             let vw = 0, vh = 0, colX = pad, colBand = rect.width - pad * 2;
             if (videoOn) {
-                vw = clampNum(parseFloat(videoEl.style.width) || Math.min(800, rect.width - pad * 2 - 320), 360, Math.max(360, rect.width - pad * 2 - 240));
-                vh = clampNum(parseFloat(videoEl.style.height) || (vw * 9 / 16), 120, rect.height - pad * 2);
+                vw = clampNum(parseFloat(videoEl.style.width) || Math.min(800, rect.width - pad * 2 - 320), 360, Math.max(360, Math.min(Math.floor(rect.width / 2) - pad, rect.width - pad * 2 - 240)));
+                vh = clampNum(parseFloat(videoEl.style.height) || (vw * 9 / 16), 120, Math.max(120, Math.min(Math.floor(rect.height / 2) - pad, rect.height - pad * 2)));
                 videoEl.style.height = vh + 'px';
                 const videoRight = (parseFloat(videoEl.style.left) || pad) > (rect.width - vw) / 2;
                 if (videoRight) {
@@ -1639,7 +1648,7 @@ if (!state.vcamActive || !state.remoteStream) return;
                                 vw = vw2;
                                 const videoRight = (parseFloat(videoEl.style.left) || pad) > (rect.width - vw) / 2;
                                 colX = videoRight ? pad : pad + vw + pad;
-                                videoEl.style.height = Math.round(clampNum(vw * 9 / 16, 120, rect.height - pad * 2)) + 'px';
+                                videoEl.style.height = Math.round(clampNum(vw * 9 / 16, 120, Math.max(120, Math.min(Math.floor(rect.height / 2) - pad, rect.height - pad * 2)))) + 'px';
                                 if (videoRight) place(videoEl, rect.width - pad - vw, pad, vw);
                                 else place(videoEl, pad, pad, vw);
                                 pack = re;
@@ -1697,15 +1706,80 @@ if (!state.vcamActive || !state.remoteStream) return;
         el.classList.add('z-top');
     }
 
-    // Magnetic snapping: near edges of the app area or of sibling windows,
-    // the dragged window snaps to alignment (like macOS window movement).
-    function snapDrag(x, y, el, main) {
+    // Free-placement collision resolution: keeps the user's positions, but any
+    // overlapping window is pushed gently out of the way (always inside #main).
+    function resolveOverlaps(animated) {
+        const mainEl = document.getElementById('main');
+        const rect = mainEl.getBoundingClientRect();
+        const pad = 8;
+        const els = Array.from(document.querySelectorAll('.win')).filter(el => {
+            if (el.style.display === 'none') return false;
+            if (!el.offsetWidth && !el.offsetHeight) return false;
+            return true;
+        });
+        if (els.length < 2) return;
+        const boxes = els.map(el => {
+            const r = el.getBoundingClientRect();
+            return { el, x: r.left - rect.left, y: r.top - rect.top, w: el.offsetWidth, h: el.offsetHeight };
+        });
+        for (const b of boxes) {
+            b.x = clampNum(b.x, pad, Math.max(pad, rect.width - b.w - pad));
+            b.y = clampNum(b.y, pad, Math.max(pad, rect.height - b.h - pad));
+        }
+        const pushOut = (mover, fixed) => {
+            const ox = Math.min(mover.x + mover.w, fixed.x + fixed.w) - Math.max(mover.x, fixed.x);
+            const oy = Math.min(mover.y + mover.h, fixed.y + fixed.h) - Math.max(mover.y, fixed.y);
+            if (ox <= 0 || oy <= 0) return false;
+            const dx = (ox < oy) ? ox : 0;
+            const dy = dx === 0 ? oy : 0;
+            const acx = fixed.x + fixed.w / 2, bcx = mover.x + mover.w / 2;
+            const acy = fixed.y + fixed.h / 2, bcy = mover.y + mover.h / 2;
+            let nx = mover.x, ny = mover.y;
+            if (dx) nx = mover.x + (bcx >= acx ? dx : -dx);
+            else ny = mover.y + (bcy >= acy ? dy : -dy);
+            nx = clampNum(nx, pad, Math.max(pad, rect.width - mover.w - pad));
+            ny = clampNum(ny, pad, Math.max(pad, rect.height - mover.h - pad));
+            if (nx !== mover.x || ny !== mover.y) {
+                mover.x = nx;
+                mover.y = ny;
+                return true;
+            }
+            return false;
+        };
+        for (let pass = 0; pass < 10; pass++) {
+            let moved = false;
+            for (let i = 0; i < boxes.length; i++) {
+                for (let j = i + 1; j < boxes.length; j++) {
+                    const a = boxes[i], b = boxes[j];
+                    if (Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) <= 0) continue;
+                    if (Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) <= 0) continue;
+                    let mover = (pass % 2 === 0) ? b : a;
+                    if (a.el.id === 'connect-panel') mover = b;
+                    else if (b.el.id === 'connect-panel') mover = a;
+                    if (pushOut(mover, mover === a ? b : a)) moved = true;
+                }
+            }
+            if (!moved) break;
+        }
+        if (animated) {
+            mainEl.classList.add('arranging');
+            setTimeout(() => mainEl.classList.remove('arranging'), 340);
+        }
+        for (const b of boxes) {
+            b.el.style.left = Math.round(b.x) + 'px';
+            b.el.style.top = Math.round(b.y) + 'px';
+        }
+    }
+
+// Magnetic snapping: near edges (or the center) of the app area or of sibling
+// windows, the dragged window snaps to alignment (like macOS window movement).
+function snapDrag(x, y, el, main) {
         const w = el.offsetWidth, h = el.offsetHeight;
-        const T = 9;
+        const T = 16;
         let sx = x, sy = y;
-        const edgeX = [8, main.width - w - 8];
+        const edgeX = [8, main.width - w - 8, Math.round((main.width - w) / 2)];
         for (const ex of edgeX) if (Math.abs(ex - x) <= T) { sx = ex; break; }
-        const edgeY = [8, main.height - h - 8];
+        const edgeY = [8, main.height - h - 8, Math.round((main.height - h) / 2)];
         for (const ey of edgeY) if (Math.abs(ey - y) <= T) { sy = ey; break; }
         document.querySelectorAll('.win').forEach(ob => {
             if (ob === el || !ob.id || ob.style.display === 'none' || !ob.offsetWidth) return;
@@ -1713,12 +1787,12 @@ if (!state.vcamActive || !state.remoteStream) return;
             const ol = r.left - main.left, ot = r.top - main.top;
             const vertHit = y < ot + r.height + T && y + h > ot - T;
             if (vertHit) {
-                const tx = [ol - w - 8, ol, ol + r.width + 8];
+                const tx = [ol - w - 8, ol, ol + r.width + 8, ol + Math.round((r.width - w) / 2)];
                 for (const t of tx) if (Math.abs(t - x) <= T) { sx = t; break; }
             }
             const horizHit = x < ol + r.width + T && x + w > ol - T;
             if (horizHit) {
-                const ty = [ot - h - 8, ot, ot + r.height + 8];
+                const ty = [ot - h - 8, ot, ot + r.height + 8, ot + Math.round((r.height - h) / 2)];
                 for (const t of ty) if (Math.abs(t - y) <= T) { sy = t; break; }
             }
         });
@@ -1760,8 +1834,7 @@ if (!state.vcamActive || !state.remoteStream) return;
                 window.removeEventListener('pointerup', onUp);
                 try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
                 if (moved) {
-                    if (el.id !== 'connect-panel') autoArrange(true);
-                    document.getElementById('main').classList.remove('arranging');
+                    resolveOverlaps(true);
                     saveLayout();
                 }
             };
@@ -1778,18 +1851,27 @@ if (!state.vcamActive || !state.remoteStream) return;
             e.stopPropagation();
             document.getElementById('main').classList.remove('arranging');
             raiseWin(el);
-            const rect = el.getBoundingClientRect();
-            const mainRect = document.getElementById('main').getBoundingClientRect();
             const startW = el.offsetWidth;
             const startH = el.offsetHeight;
             const left = parseFloat(el.style.left) || 0;
             const top = parseFloat(el.style.top) || 0;
             const minW = el.id === 'video-panel' ? 360 : 240;
             const minH = el.id === 'video-panel' ? 200 : 90;
+            const px = e.clientX, py = e.clientY;
+            const isVideo = el.id === 'video-panel';
+            const mainRect = document.getElementById('main').getBoundingClientRect();
+            const maxW = isVideo
+                ? Math.max(minW, Math.floor(mainRect.width / 2))
+                : mainRect.width - left - 8;
+            const maxH = isVideo
+                ? Math.max(minH, Math.floor(mainRect.height / 2))
+                : mainRect.height - top - 8;
             try { resizer.setPointerCapture(e.pointerId); } catch (err) {}
+            document.body.classList.add('resizing');
+            el.classList.add('win-resizing');
             const onMove = (ev) => {
-                const w = clampNum(startW + (ev.clientX - rect.left), minW, mainRect.width - left - 8);
-                const h = clampNum(startH + (ev.clientY - rect.top), minH, mainRect.height - top - 8);
+                const w = clampNum(startW + (ev.clientX - px), minW, maxW);
+                const h = clampNum(startH + (ev.clientY - py), minH, maxH);
                 el.style.width = w + 'px';
                 el.style.height = h + 'px';
             };
@@ -1797,11 +1879,46 @@ if (!state.vcamActive || !state.remoteStream) return;
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
                 try { resizer.releasePointerCapture(e.pointerId); } catch (err) {}
+                document.body.classList.remove('resizing');
+                el.classList.remove('win-resizing');
+                resolveOverlaps(true);
                 saveLayout();
             };
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
         });
+    }
+
+    function initWindowControls() {
+        const wc = window.winControls || null;
+        const btnMin = document.getElementById('btn-win-min');
+        const btnMax = document.getElementById('btn-win-max');
+        const btnClose = document.getElementById('btn-win-close');
+        const MAX_GLYPH = '<svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg>';
+        const RESTORE_GLYPH = '<svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/><rect x="2" y="2" width="7" height="7" fill="rgba(127,127,127,0.35)" stroke="currentColor"/></svg>';
+        const applyMaxState = (maximized) => {
+            if (btnMax) {
+                btnMax.innerHTML = maximized ? RESTORE_GLYPH : MAX_GLYPH;
+                btnMax.title = maximized ? 'Restaurar' : 'Maximizar';
+            }
+        };
+        if (btnMin) {
+            btnMin.addEventListener('click', (e) => { e.preventDefault(); if (wc) wc.minimize(); });
+        }
+        if (btnMax) {
+            btnMax.addEventListener('click', (e) => { e.preventDefault(); if (wc) wc.toggleMaximize(); });
+        }
+        if (btnClose) {
+            btnClose.addEventListener('click', (e) => { e.preventDefault(); if (wc) wc.close(); else window.close(); });
+        }
+        if (wc && wc.onMaximized) wc.onMaximized(applyMaxState);
+        const header = document.getElementById('header');
+        if (header) {
+            header.addEventListener('dblclick', (e) => {
+                if (e.target.closest('button, a, input, select, textarea, label')) return;
+                if (wc) wc.toggleMaximize();
+            });
+        }
     }
 
     function initWindows() {

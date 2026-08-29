@@ -1,6 +1,6 @@
 Add-Type -AssemblyName System.Drawing
 
-$projectDir = "C:\Users\jere_\.gemini\antigravity-ide\scratch\phonecam-pro"
+$projectDir = "C:\Users\jere_\Documents\phonecam-pro"
 $assetsDir = Join-Path $projectDir "assets"
 $iconJpg = Join-Path $assetsDir "icon.jpg"
 $iconPng = Join-Path $assetsDir "icon.png"

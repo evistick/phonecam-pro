@@ -104,6 +104,12 @@
         $('#btn-close-settings').addEventListener('click', () => toggleSettings(false));
         $('#btn-disconnect').addEventListener('click', disconnect);
 
+        // Liquid-glass UI: tap the camera to hide/reveal controls; tap scrim to close settings
+        $('#video-container').addEventListener('click', () => {
+            if (!state.settingsVisible) document.body.classList.toggle('ui-hidden');
+        });
+        $('#settings-scrim').addEventListener('click', () => toggleSettings(false));
+
         // Resolution buttons
         document.querySelectorAll('#resolution-group .toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -631,6 +637,7 @@
         const show = typeof force === 'boolean' ? force : !state.settingsVisible;
         state.settingsVisible = show;
         settingsPanel.classList.toggle('hidden', !show);
+        $('#settings-scrim').classList.toggle('hidden', !show);
         $('#btn-settings').classList.toggle('active', show);
     }
 
@@ -922,6 +929,7 @@
 
     // ─── UI Updates ─────────────────────────────────────────
     function updateConnectionUI(connState) {
+        document.body.classList.remove('ui-hidden');
         connectionIndicator.className = 'indicator';
         switch (connState) {
             case 'connected':

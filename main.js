@@ -3,7 +3,7 @@
  * Embeds the Node.js server and provides a native Windows desktop experience
  */
 
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { startServer, PORT, getProtocol, LOCAL_IP } = require('./server');
 
@@ -31,16 +31,30 @@ function createWindow() {
         height: 850,
         minWidth: 960,
         minHeight: 620,
+        frame: false,
         backgroundColor: '#08081a',
         title: 'PhoneCam Pro',
         icon: iconPath,
         autoHideMenuBar: false,
         webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: false,
             allowRunningInsecureContent: true
         }
+    });
+
+    mainWindow.maximize();
+
+    mainWindow.on('maximize', () => {
+        mainWindow.webContents.send('win-maximized-changed', true);
+    });
+    mainWindow.on('unmaximize', () => {
+        mainWindow.webContents.send('win-maximized-changed', false);
+    });
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.send('win-maximized-changed', mainWindow.isMaximized());
     });
 
     const protocol = getProtocol();
@@ -188,3 +202,21 @@ if (!gotTheLock) {
         }
     });
 }
+
+// ─── Window controls (embedded Windows caption buttons) ──────
+ipcMain.on('win-minimize', () => {
+    if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.on('win-maximize-toggle', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+    } else {
+        mainWindow.maximize();
+    }
+});
+
+ipcMain.on('win-close', () => {
+    if (mainWindow) mainWindow.close();
+});
