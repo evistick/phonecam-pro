@@ -37,7 +37,7 @@
         orientation: 'auto', // 'auto' | 'portrait' | 'landscape'
         blackout: false,
         beautyOn: false,
-        beautyConfig: { on: false, smooth: 70, glow: 50, faceMode: true }
+        beautyConfig: { on: false, smooth: 70, glow: 50, sharp: 40, faceMode: true }
     };
 
     // ─── DOM Elements ───────────────────────────────────────
@@ -62,6 +62,7 @@
     const beautySliders = $('#beauty-sliders');
     const beautySmooth = $('#beauty-smooth');
     const beautyGlow = $('#beauty-glow');
+    const beautySharp = $('#beauty-sharp');
 
     // ─── Initialize ─────────────────────────────────────────
     function init() {
@@ -160,6 +161,13 @@
             const val = parseInt(e.target.value);
             $('#beauty-glow-value').textContent = val + '%';
             applyBeautyConfig({ glow: val });
+            emitBeautyToPC();
+        });
+
+        beautySharp.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            $('#beauty-sharp-value').textContent = val + '%';
+            applyBeautyConfig({ sharp: val });
             emitBeautyToPC();
         });
 
@@ -324,6 +332,46 @@
         connect();
     }
 
+    // ─── Device identity (para "buscar dispositivos en la red") ─
+    function deviceMeta() {
+        const ua = navigator.userAgent;
+        let model = 'iPhone';
+        if (/iPad/.test(ua)) model = 'iPad';
+        else if (/iPod/.test(ua)) model = 'iPod';
+        else if (/Android/i.test(ua)) model = 'Android';
+        let os = '';
+        const iosM = ua.match(/OS (\d+)(?:_(\d+))?/);
+        if (iosM) os = 'iOS ' + iosM[1] + '.' + (iosM[2] || '0');
+        else { const am = ua.match(/Android (\d+(?:\.\d+)?)/); if (am) os = 'Android ' + am[1]; }
+        return {
+            name: model,
+            model: os ? (model + ' (' + os + ')') : model,
+            platform: /Android/i.test(ua) ? 'android' : 'ios'
+        };
+    }
+
+    function getDeviceId() {
+        let id = null;
+        try { id = localStorage.getItem('phonecam-device-id'); } catch (e) { /* noop */ }
+        if (!id) {
+            id = 'dev-' + Math.random().toString(36).slice(2, 10);
+            try { localStorage.setItem('phonecam-device-id', id); } catch (e) { /* noop */ }
+        }
+        return id;
+    }
+
+    function registerDevice() {
+        if (!state.socket || !state.roomId) return;
+        const m = deviceMeta();
+        state.socket.emit('register-device', {
+            deviceId: getDeviceId(),
+            name: m.name,
+            model: m.model,
+            platform: m.platform,
+            native: /Capacitor|Cordova|ionic/i.test(navigator.userAgent)
+        });
+    }
+
     // ─── Connection ─────────────────────────────────────────
     function connect(explicitRoom) {
         stopQRScanner();
@@ -355,6 +403,7 @@
                 }
                 showStatus('Conectado, iniciando cámara...', 'success');
                 startCamera();
+                registerDevice();
             });
         });
 
@@ -381,7 +430,12 @@
                 if (state.stream) {
                     initWebRTC();
                 }
+                registerDevice();
             });
+        });
+
+        state.socket.on('select-device', (data) => {
+            if (!state.stream) startCamera();
         });
 
         state.socket.on('peer-joined', (data) => {
@@ -424,6 +478,7 @@
 
             state.stream = await navigator.mediaDevices.getUserMedia(constraints);
             localVideo.srcObject = state.stream;
+            try { await localVideo.play(); } catch (e) { /* noop */ }
 
             connectScreen.classList.remove('active');
             cameraScreen.classList.add('active');
@@ -897,6 +952,7 @@
             vendorBase: '/shared/vendor/mediapipe/',
             smooth: cfg.smooth,
             glow: cfg.glow,
+            sharp: cfg.sharp,
             faceMode: cfg.faceMode
         });
         if (!track) return;
@@ -941,16 +997,19 @@
         beautySliders.style.display = cfg.on ? 'block' : 'none';
         beautySmooth.value = cfg.smooth;
         beautyGlow.value = cfg.glow;
+        beautySharp.value = cfg.sharp;
         $('#beauty-smooth-value').textContent = cfg.smooth + '%';
         $('#beauty-glow-value').textContent = cfg.glow + '%';
+        $('#beauty-sharp-value').textContent = cfg.sharp + '%';
         beautySmooth.disabled = !cfg.on;
         beautyGlow.disabled = !cfg.on;
+        beautySharp.disabled = !cfg.on;
     }
 
     function emitBeautyToPC() {
         if (!state.socket) return;
         const cfg = state.beautyConfig;
-        state.socket.emit('beauty-config', { on: cfg.on, smooth: cfg.smooth, glow: cfg.glow });
+        state.socket.emit('beauty-config', { on: cfg.on, smooth: cfg.smooth, glow: cfg.glow, sharp: cfg.sharp });
     }
 
     // ─── Battery Monitor ────────────────────────────────────

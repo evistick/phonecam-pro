@@ -35,6 +35,9 @@
         vcamH: 0,
         smooth: 0,
         glow: 0,
+        sharp: 0,
+        devices: [],
+        activeDeviceId: null,
         smoothCanvas: null,
         smoothCtx: null,
         currentFilter: 'none',
@@ -74,6 +77,7 @@
     const mobileUrl = $('#mobile-url');
     const connectionBadge = $('#connection-badge');
     const connectionText = $('#connection-text');
+    const deviceListEl = $('#device-list');
     const recordingIndicator = $('#recording-indicator');
     const recTimer = $('#rec-timer');
 
@@ -143,6 +147,7 @@ state.socket.on('peer-joined', (data) => {
                 $('#d-beauty-label').textContent = data.on ? 'Activado' : 'Desactivado';
                 $('#d-smooth').disabled = !data.on;
                 $('#d-glow').disabled = !data.on;
+                $('#d-sharp').disabled = !data.on;
                 if (!data.on) stopPreviewLoop();
             }
             if (typeof data.smooth === 'number') {
@@ -163,6 +168,27 @@ state.socket.on('peer-joined', (data) => {
                 const gmax = parseFloat(g.max) || 100;
                 g.style.setProperty('--p', (Math.min(100, Math.max(0, (data.glow - gmin) / (gmax - gmin) * 100))) + '%');
             }
+            if (typeof data.sharp === 'number') {
+                state.sharp = data.sharp;
+                const sh = $('#d-sharp');
+                sh.value = data.sharp;
+                $('#d-sharp-val').textContent = data.sharp + '%';
+                const shmin = parseFloat(sh.min) || 0;
+                const shmax = parseFloat(sh.max) || 100;
+                sh.style.setProperty('--p', (Math.min(100, Math.max(0, (data.sharp - shmin) / (shmax - shmin) * 100))) + '%');
+            }
+        });
+
+        // Device discovery (devices visible in this room / same network)
+        state.socket.on('device-list', (data) => {
+            state.devices = data.devices || [];
+            renderDevices();
+        });
+
+        state.socket.on('device-selected', (data) => {
+            if (state.activeDeviceId === data.deviceId) return;
+            state.activeDeviceId = data.deviceId;
+            renderDevices();
         });
 
         // Setup WebRTC signaling
@@ -205,6 +231,51 @@ state.socket.on('peer-joined', (data) => {
 
             // Setup WebRTC for this room
             setupWebRTC();
+
+            // Seed the device list (already connected phones in this room)
+            state.devices = [];
+            renderDevices();
+            try {
+                const devRes = await fetch(`/api/devices/${state.roomId}`);
+                const devData = await devRes.json();
+                state.devices = devData.devices || [];
+                renderDevices();
+            } catch (err) {
+                console.error('Device list error:', err);
+            }
+        });
+    }
+
+    // ─── Device Discovery ────────────────────────────────────
+    function renderDevices() {
+        if (!deviceListEl) return;
+        if (!state.devices.length) {
+            deviceListEl.innerHTML = '<div class="device-empty">Sin dispositivos todavía. Escanea el QR con tu teléfono.</div>';
+            return;
+        }
+        deviceListEl.innerHTML = '';
+        state.devices.forEach(dev => {
+            const item = document.createElement('div');
+            item.className = 'device-item' + (state.activeDeviceId === dev.deviceId ? ' selected' : '');
+            const bat = typeof dev.battery === 'number' ? ' · Batería ' + dev.battery + '%' : '';
+            const badge = dev.streaming
+                ? '<span class="device-badge streaming">● EN USO</span>'
+                : '<span class="device-badge">Conectado</span>';
+            item.innerHTML =
+                '<span class="device-icon">📱</span>' +
+                '<div class="device-info">' +
+                '<div class="device-name"></div>' +
+                '<div class="device-meta"></div>' +
+                '</div>' + badge;
+            item.querySelector('.device-name').textContent = dev.name || 'iPhone';
+            item.querySelector('.device-meta').textContent = (dev.model || '') + (dev.native ? '· App' : '· Web') + bat;
+            item.addEventListener('click', () => {
+                state.activeDeviceId = dev.deviceId;
+                renderDevices();
+                state.socket.emit('select-device', { deviceId: dev.deviceId });
+                showToast('📱 Usando ' + (dev.name || 'tu teléfono') + ' como cámara', 'success');
+            });
+            deviceListEl.appendChild(item);
         });
     }
 
@@ -408,6 +479,7 @@ if (!state.vcamActive || !state.remoteStream) return;
             on: state.dest === 'phone' && state.beautyEnabled,
             smooth: state.smooth,
             glow: state.glow,
+            sharp: state.sharp,
             faceMode: true
         });
     }
@@ -967,12 +1039,22 @@ if (!state.vcamActive || !state.remoteStream) return;
             if (state.dest === 'phone') emitBeautyConfig();
         });
 
+        // Skin sharpness (fine detail, restores texture over the smoothing)
+        $('#d-sharp').addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            $('#d-sharp-val').textContent = val + '%';
+            fillSlider(e.target);
+            state.sharp = val;
+            if (state.dest === 'phone') emitBeautyConfig();
+        });
+
         // Beauty on/off toggle
         $('#d-beauty-check').addEventListener('change', (e) => {
             state.beautyEnabled = e.target.checked;
             const lbl = $('#d-beauty-label');
             $('#d-smooth').disabled = !state.beautyEnabled;
             $('#d-glow').disabled = !state.beautyEnabled;
+            $('#d-sharp').disabled = !state.beautyEnabled;
             lbl.textContent = state.beautyEnabled ? 'Activado' : 'Desactivado';
             if (state.beautyEnabled) {
                 if (state.dest === 'pc' && state.smooth > 0) startPreviewLoop();

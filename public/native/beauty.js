@@ -92,7 +92,7 @@
     const beauty = {
         active: false,
         raf: null,
-        params: { smooth: 0, glow: 0, faceMode: false },
+        params: { smooth: 0, glow: 0, sharp: 40, faceMode: false },
         rawStream: null,
         rawTrack: null,
         vendorBase: 'vendor/mediapipe/',
@@ -101,6 +101,7 @@
         smoothCanvas: null, smoothCtx: null,
         maskCanvas: null, maskCtx: null, maskBlur: null, maskBlurCtx: null,
         skinLayer: null, skinCtx: null,
+        sharpLayer: null, sharpCtx: null,
         underCv: null, underCtx: null, rosyCv: null, rosyCtx: null,
         underMask: null, underMaskCtx: null, underMaskBlur: null, underMaskBlurCtx: null,
         detCanvas: null, detCtx: null,
@@ -140,6 +141,8 @@
             beauty.maskBlurCtx = beauty.maskBlur.getContext('2d');
             beauty.skinLayer = document.createElement('canvas');
             beauty.skinCtx = beauty.skinLayer.getContext('2d');
+            beauty.sharpLayer = document.createElement('canvas');
+            beauty.sharpCtx = beauty.sharpLayer.getContext('2d');
             beauty.underCv = document.createElement('canvas');
             beauty.underCtx = beauty.underCv.getContext('2d');
             beauty.rosyCv = document.createElement('canvas');
@@ -150,6 +153,7 @@
             beauty.underMaskBlurCtx = beauty.underMaskBlur.getContext('2d');
         }
         beauty.canvas.width = W; beauty.canvas.height = H;
+        beauty.sharpLayer.width = W; beauty.sharpLayer.height = H;
     }
 
     let domSlot;
@@ -267,9 +271,15 @@
             beauty.underCv.width = sw; beauty.underCv.height = sh;
             beauty.rosyCv.width = sw; beauty.rosyCv.height = sh;
         }
-        sctx.filter = 'blur(' + Math.max(2, Math.round(W / 320)) + 'px)';
+        sctx.filter = 'blur(' + Math.max(2, Math.round(W / 130)) + 'px)';
         sctx.drawImage(beauty.canvas, 0, 0, sw, sh);
         sctx.filter = 'none';
+
+        const pK = beauty.sharpCtx;
+        pK.globalCompositeOperation = 'source-over';
+        pK.globalAlpha = 1;
+        pK.clearRect(0, 0, W, H);
+        pK.drawImage(beauty.canvas, 0, 0, W, H);
 
         const mw = Math.round(W / 3), mh = Math.round(H / 3);
         if (beauty.maskCanvas.width !== mw) {
@@ -313,7 +323,7 @@
 
         const mb = beauty.maskBlurCtx;
         mb.clearRect(0, 0, mw, mh);
-        mb.filter = 'blur(' + Math.max(2, Math.round(mh / 60)) + 'px)';
+        mb.filter = 'blur(' + Math.max(2, Math.round(mh / 32)) + 'px)';
         mb.drawImage(beauty.maskCanvas, 0, 0);
         mb.filter = 'none';
         m.clearRect(0, 0, mw, mh);
@@ -321,7 +331,16 @@
 
         buildUnderMask(lms);
 
+        const pK2 = beauty.sharpCtx;
+        pK2.globalCompositeOperation = 'destination-in';
+        pK2.drawImage(beauty.maskCanvas, 0, 0, mw, mh, 0, 0, W, H);
+        pK2.globalCompositeOperation = 'source-over';
+
         const ctx = beauty.ctx;
+        const smoothK = beauty.params.smooth / 100;
+        const whiteK = beauty.params.glow / 100;
+        const sharpK = beauty.params.sharp / 100;
+
         const sK = beauty.skinCtx;
         sK.clearRect(0, 0, sw, sh);
         sK.drawImage(beauty.smoothCanvas, 0, 0);
@@ -329,10 +348,12 @@
         sK.drawImage(beauty.maskCanvas, 0, 0, mw, mh, 0, 0, sw, sh);
         sK.globalCompositeOperation = 'source-over';
 
+        ctx.save();
         ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 0.35 + (beauty.params.smooth / 100) * 0.45;
-        ctx.drawImage(beauty.skinLayer, 0, 0, sw, sh, 0, 0, W, H);
-        ctx.globalAlpha = 1;
+        if (smoothK > 0) {
+            ctx.globalAlpha = 0.4 + smoothK * 0.55;
+            ctx.drawImage(beauty.skinLayer, 0, 0, sw, sh, 0, 0, W, H);
+        }
 
         const uC = beauty.underCtx;
         uC.clearRect(0, 0, sw, sh);
@@ -343,31 +364,36 @@
         uC.globalCompositeOperation = 'destination-in';
         uC.drawImage(beauty.underMaskBlur, 0, 0, mw, mh, 0, 0, sw, sh);
         uC.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 0.3 + (beauty.params.smooth / 100) * 0.35;
+        ctx.globalAlpha = 0.2 + smoothK * 0.25 + whiteK * 0.1;
         ctx.drawImage(beauty.underCv, 0, 0, sw, sh, 0, 0, W, H);
-        ctx.globalAlpha = 1;
 
         const rC = beauty.rosyCtx;
         rC.clearRect(0, 0, sw, sh);
-        rC.fillStyle = 'rgb(255, 182, 193)';
+        rC.fillStyle = 'rgb(255, 186, 196)';
         rC.fillRect(0, 0, sw, sh);
         rC.globalCompositeOperation = 'destination-in';
         rC.drawImage(beauty.maskCanvas, 0, 0, mw, mh, 0, 0, sw, sh);
         rC.globalCompositeOperation = 'source-over';
         ctx.globalCompositeOperation = 'overlay';
-        ctx.globalAlpha = 0.08 + (beauty.params.glow / 100) * 0.1;
+        ctx.globalAlpha = 0.06 + whiteK * 0.15;
         ctx.drawImage(beauty.rosyCv, 0, 0, sw, sh, 0, 0, W, H);
         ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = 0.05 + (beauty.params.glow / 100) * 0.08;
+        ctx.globalAlpha = 0.05 + whiteK * 0.14;
         ctx.drawImage(beauty.rosyCv, 0, 0, sw, sh, 0, 0, W, H);
 
-        if (beauty.params.glow > 0) {
+        if (whiteK > 0) {
             ctx.globalCompositeOperation = 'screen';
-            ctx.globalAlpha = 0.04 + (beauty.params.glow / 100) * 0.11;
+            ctx.globalAlpha = 0.02 + whiteK * 0.08;
             ctx.drawImage(beauty.smoothCanvas, 0, 0, sw, sh, 0, 0, W, H);
         }
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 1;
+
+        // Detalle nítido encima (textura de poros sin arrugas → NÍTIDO)
+        if (smoothK > 0 && sharpK > 0) {
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = 0.25 + sharpK * 0.5;
+            ctx.drawImage(beauty.sharpLayer, 0, 0, W, H);
+        }
+        ctx.restore();
     }
 
     function wholeFrameSmooth() {
@@ -448,7 +474,7 @@
     root.PhoneCamBeauty = {
         async start(opts) {
             if (beauty.active) return beauty.outTrack;
-            beauty.params = { smooth: opts.smooth || 0, glow: opts.glow || 0, faceMode: !!opts.faceMode };
+            beauty.params = { smooth: opts.smooth || 0, glow: opts.glow || 0, sharp: (opts.sharp === undefined ? 40 : opts.sharp), faceMode: !!opts.faceMode };
             beauty.rawStream = opts.rawStream;
             beauty.rawTrack = opts.rawStream ? opts.rawStream.getVideoTracks()[0] : null;
             beauty.vendorBase = opts.vendorBase || 'vendor/mediapipe/';
@@ -481,6 +507,7 @@
         configure(p) {
             if ('smooth' in p) beauty.params.smooth = p.smooth;
             if ('glow' in p) beauty.params.glow = p.glow;
+            if ('sharp' in p) beauty.params.sharp = p.sharp;
             if ('faceMode' in p) {
                 beauty.params.faceMode = !!p.faceMode;
                 if (beauty.params.faceMode && !beauty.landmarker) {

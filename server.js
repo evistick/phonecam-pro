@@ -18,16 +18,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Get local IP ──────────────────────────────────────────────
-function getLocalIP() {
+function getLocalIPs() {
     const interfaces = os.networkInterfaces();
+    const ips = [];
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                return iface.address;
-            }
+            if (iface.family === 'IPv4' && !iface.internal) ips.push(iface.address);
         }
     }
-    return '127.0.0.1';
+    return ips.length ? ips : ['127.0.0.1'];
+}
+
+function getLocalIP() {
+    return getLocalIPs()[0];
 }
 
 const LOCAL_IP = getLocalIP();
@@ -142,10 +145,11 @@ app.get('/api/info', (req, res) => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
     res.json({
         ip: LOCAL_IP,
+        ips: getLocalIPs(),
         port: PORT,
         protocol,
         httpPort: HTTP_PORT,
-        version: '1.1.0'
+        version: '1.2.0'
     });
 });
 
@@ -229,6 +233,15 @@ app.get('/api/virtualcam/status', (req, res) => {
     res.json({ active: vcam.active, w: vcam.w, h: vcam.h, fps: vcam.fps, device: 'PhoneCam Pro' });
 });
 
+// Room management
+app.get('/api/devices/:room', (req, res) => {
+    const room = rooms.get(req.params.room);
+    if (!room || !room.devices) {
+        return res.json({ devices: [] });
+    }
+    res.json({ devices: Array.from(room.devices.values()) });
+});
+
 // ─── Room Management ───────────────────────────────────────────
 const rooms = new Map();
 
@@ -266,6 +279,27 @@ function attachSocketHandlers(socketServer) {
         otherServer.to(roomId).emit(event, payload);
     }
 
+    // Broadcast to every socket in the room on BOTH servers (works even after sender disconnects)
+    function emitRoom(roomId, event, data) {
+        if (!roomId) return;
+        socketServer.to(roomId).emit(event, data);
+        otherServer.to(roomId).emit(event, data);
+    }
+
+    function findDevice(devices, socketId) {
+        for (const [devId, dev] of devices) {
+            if (dev.socketId === socketId) return dev;
+        }
+        return null;
+    }
+
+    function broadcastDevices(room, sender) {
+        if (!room || !room.devices) return;
+        const list = Array.from(room.devices.values());
+        socketServer.to(room.id).emit('device-list', { devices: list });
+        otherServer.to(room.id).emit('device-list', { devices: list });
+    }
+
 socketServer.on('connection', (socket) => {
     console.log(`📱 Client connected: ${socket.id}`);
     let currentRoom = null;
@@ -278,6 +312,7 @@ socketServer.on('connection', (socket) => {
             id: roomId,
             desktops: [socket.id],
             mobile: null,
+            devices: new Map(),
             created: Date.now()
         });
         currentRoom = roomId;
@@ -330,6 +365,44 @@ socketServer.on('connection', (socket) => {
         if (typeof callback === 'function') {
             callback({ success: true, roomId });
         }
+
+        // Fresh device list for the joined peer
+        const joinedRoom = rooms.get(roomId);
+        if (role === 'mobile' && joinedRoom && joinedRoom.devices && joinedRoom.devices.size) {
+            broadcastDevices(joinedRoom, socket);
+        }
+    });
+
+    // Mobile devices announce themselves so the desktop can list them
+    // ("buscar dispositivos conectados a la red")
+    socket.on('register-device', (data) => {
+        if (!currentRoom || clientRole !== 'mobile') return;
+        const room = rooms.get(currentRoom);
+        if (!room) return;
+        if (!room.devices) room.devices = new Map();
+        room.devices.set(data.deviceId || socket.id, {
+            deviceId: data.deviceId || socket.id,
+            socketId: socket.id,
+            name: data.name || 'iPhone',
+            model: data.model || '',
+            platform: data.platform || 'ios',
+            native: !!data.native,
+            battery: null,
+            streaming: false,
+            connectedAt: Date.now()
+        });
+        broadcastDevices(room, socket);
+        console.log(`📱 Device registered in ${currentRoom}: ${data.name || 'iPhone'}`);
+    });
+
+    socket.on('select-device', (data) => {
+        if (!currentRoom) return;
+        const room = rooms.get(currentRoom);
+        if (!room || !room.devices) return;
+        if (!room.devices.has(data.deviceId)) return;
+        relay(currentRoom, 'select-device', { deviceId: data.deviceId }, socket);
+        socketServer.to(currentRoom).emit('device-selected', { deviceId: data.deviceId, from: 'desktop' });
+        otherServer.to(currentRoom).emit('device-selected', { deviceId: data.deviceId, from: 'desktop' });
     });
 
     // WebRTC signaling: Offer
@@ -371,6 +444,18 @@ socketServer.on('connection', (socket) => {
     statusEvents.forEach(event => {
         socket.on(event, (data) => {
             relay(currentRoom, event, data, socket);
+            if (clientRole !== 'mobile') return;
+            const room = currentRoom ? rooms.get(currentRoom) : null;
+            if (!room || !room.devices) return;
+            const dev = findDevice(room.devices, socket.id);
+            if (!dev) return;
+            if (event === 'battery-status' && data && typeof data.level === 'number') {
+                dev.battery = data.level;
+            }
+            if (event === 'stats-update') {
+                dev.streaming = true;
+            }
+            broadcastDevices(room, socket);
         });
     });
 
@@ -422,6 +507,12 @@ socketServer.on('connection', (socket) => {
             } else if (clientRole === 'mobile' && rooms.has(currentRoom)) {
                 const room = rooms.get(currentRoom);
                 room.mobile = null;
+                if (room.devices) {
+                    for (const [devId, dev] of room.devices) {
+                        if (dev.socketId === socket.id) room.devices.delete(devId);
+                    }
+                    broadcastDevices(room, socket);
+                }
             }
         }
     });

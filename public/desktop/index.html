@@ -124,6 +124,20 @@
 
             <!-- Right: Control Windows -->
             <aside id="controls-section">
+                <!-- Device Discovery -->
+                <div class="ctrl-panel win" id="devices-panel">
+                    <div class="ctrl-header">
+                        <h3>📱 Dispositivos en la red</h3>
+                    </div>
+                    <div class="ctrl-body">
+                        <p class="obs-desc">Teléfonos conectados a esta sala por la red local.</p>
+                        <div id="device-list" class="device-list">
+                            <div class="device-empty">Buscando dispositivos...</div>
+                        </div>
+                    </div>
+                    <div class="win-resizer"></div>
+                </div>
+
                 <!-- Stats Panel -->
                 <div class="ctrl-panel win" id="stats-panel">
                     <div class="ctrl-header">
@@ -279,8 +293,14 @@
 
                         <!-- Skin brightening -->
                         <div class="ctrl-group">
-                            <label>Iluminar piel <span id="d-glow-val">0%</span></label>
+                            <label>Blanquear piel <span id="d-glow-val">0%</span></label>
                             <input type="range" id="d-glow" min="0" max="100" value="0">
+                        </div>
+
+                        <!-- Skin sharpness (fine detail) -->
+                        <div class="ctrl-group">
+                            <label>Nitidez <span id="d-sharp-val">0%</span></label>
+                            <input type="range" id="d-sharp" min="0" max="100" value="0">
                         </div>
 
                         <!-- Processing destination -->

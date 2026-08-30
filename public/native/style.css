@@ -945,20 +945,3 @@ body.ui-hidden #stats-overlay {
         font-size: 20px;
     }
 }
-
-/* ─── Animations ────────────────────────────────────── */
-
-@keyframes fade-in {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.connect-container > * {
-    animation: fade-in 0.4s ease-out both;
-}
-
-.connect-container > *:nth-child(1) { animation-delay: 0.05s; }
-.connect-container > *:nth-child(2) { animation-delay: 0.1s; }
-.connect-container > *:nth-child(3) { animation-delay: 0.15s; }
-.connect-container > *:nth-child(4) { animation-delay: 0.2s; }
-.connect-container > *:nth-child(5) { animation-delay: 0.25s; }
