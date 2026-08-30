@@ -152,7 +152,7 @@
                     </div>
                 </div>
 
-                <!-- Filters -->
+<!-- Filters -->
                 <div class="setting-group">
                     <label>Filtro</label>
                     <div class="filter-grid" id="filter-group">
@@ -162,10 +162,27 @@
                         <button data-value="vintage" class="filter-btn">Vintage</button>
                         <button data-value="contrast" class="filter-btn">Contraste</button>
                         <button data-value="invert" class="filter-btn">Negativo</button>
-                        <button data-value="warm" class="filter-btn">CÃ¡lido</button>
-                        <button data-value="cool" class="filter-btn">FrÃ­o</button>
+                        <button data-value="warm" class="filter-btn">Cálido</button>
+                        <button data-value="cool" class="filter-btn">Frío</button>
                         <button data-value="saturate" class="filter-btn">Saturado</button>
                     </div>
+                </div>
+
+                <!-- Beauty (on-device iPhone) -->
+                <div class="setting-group">
+                    <label>Belleza (procesada en el iPhone)</label>
+                    <div class="toggle-group" id="beauty-toggle-group">
+                        <button id="beauty-toggle" class="toggle-btn">Desactivado</button>
+                    </div>
+                </div>
+
+                <!-- Beauty sliders -->
+                <div class="setting-group" id="beauty-sliders" style="display:none;">
+                    <label>Suavizar piel: <span id="beauty-smooth-value">70%</span></label>
+                    <input type="range" id="beauty-smooth" min="0" max="100" step="1" value="70">
+                    <label>Iluminar piel: <span id="beauty-glow-value">50%</span></label>
+                    <input type="range" id="beauty-glow" min="0" max="100" step="1" value="50">
+                </div>
                 </div>
 
                 <!-- Zoom -->

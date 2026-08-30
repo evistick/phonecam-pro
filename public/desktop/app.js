@@ -135,6 +135,36 @@ state.socket.on('peer-joined', (data) => {
             }
         });
 
+        // Syncing panel when beauty is changed from the iPhone (on-device)
+        state.socket.on('beauty-config', (data) => {
+            if (typeof data.on === 'boolean') {
+                state.beautyEnabled = data.on;
+                $('#d-beauty-check').checked = data.on;
+                $('#d-beauty-label').textContent = data.on ? 'Activado' : 'Desactivado';
+                $('#d-smooth').disabled = !data.on;
+                $('#d-glow').disabled = !data.on;
+                if (!data.on) stopPreviewLoop();
+            }
+            if (typeof data.smooth === 'number') {
+                state.smooth = data.smooth;
+                const s = $('#d-smooth');
+                s.value = data.smooth;
+                $('#d-smooth-val').textContent = data.smooth + '%';
+                const smin = parseFloat(s.min) || 0;
+                const smax = parseFloat(s.max) || 100;
+                s.style.setProperty('--p', (Math.min(100, Math.max(0, (data.smooth - smin) / (smax - smin) * 100))) + '%');
+            }
+            if (typeof data.glow === 'number') {
+                state.glow = data.glow;
+                const g = $('#d-glow');
+                g.value = data.glow;
+                $('#d-glow-val').textContent = data.glow + '%';
+                const gmin = parseFloat(g.min) || 0;
+                const gmax = parseFloat(g.max) || 100;
+                g.style.setProperty('--p', (Math.min(100, Math.max(0, (data.glow - gmin) / (gmax - gmin) * 100))) + '%');
+            }
+        });
+
         // Setup WebRTC signaling
         setupWebRTC();
 
@@ -1287,7 +1317,6 @@ if (!state.vcamActive || !state.remoteStream) return;
     function showVideoPanel(show) {
         connectPanel.style.display = show ? 'none' : 'block';
         videoPanel.style.display = show ? 'block' : 'none';
-        autoArrange();
         saveLayout();
     }
 
@@ -1375,6 +1404,8 @@ if (!state.vcamActive || !state.remoteStream) return;
     // ─── Start ──────────────────────────────────────────────
     // ─── Window Management ─────────────────────────────────
     const LAYOUT_KEY = 'phonecam-layout';
+    const LAYOUT_VER_KEY = 'phonecam-layout-v';
+    const LAYOUT_VER = 3;
 
     function getWindowArea() {
         const main = document.getElementById('main');
@@ -1416,10 +1447,11 @@ if (!state.vcamActive || !state.remoteStream) return;
 
     function defaultLayout() {
         const area = getWindowArea();
-        const pad = 16;
-        const panelW = Math.min(470, Math.max(300, Math.round((area.w - pad) * 0.34)));
-        const videoW = Math.max(420, Math.min(area.w - panelW - pad * 3, Math.floor(area.w / 2)));
-        const videoH = Math.max(236, Math.round(videoW * 9 / 16));
+        const pad = 8;
+        const gap = 8;
+        const cols = 4;
+        const panelW = clampNum(Math.floor((area.w - pad * 2 - gap * (cols - 1)) / cols), 280, 500);
+        const colX = (i) => Math.round(pad + i * (panelW + gap));
         const assign = (id, x, y, w, h) => {
             const el = document.getElementById(id);
             if (!el) return;
@@ -1429,19 +1461,58 @@ if (!state.vcamActive || !state.remoteStream) return;
             if (h) el.style.height = Math.round(h) + 'px';
             else el.style.height = '';
         };
-        assign('video-panel', pad, pad, videoW, videoH);
-        assign('stats-panel', pad, pad + videoH + pad, Math.min(430, area.w - panelW - pad * 3), null);
-        let cy = pad;
-        const rightX = area.w - panelW - pad;
-        ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'overlay-panel', 'vcam-panel'].forEach(id => {
+
+        // Conectar: centrado arriba (mantiene su propio ancho).
+        const cp = document.getElementById('connect-panel');
+        const cw = clampNum((cp && cp.offsetWidth > 260 ? cp.offsetWidth : 400), 320, Math.min(430, area.w - pad * 2));
+        const cLeft = Math.max(8, Math.round((area.w - cw) / 2));
+        const cTop = 10;
+        if (cp) {
+            cp.style.width = cw + 'px';
+            cp.style.left = cLeft + 'px';
+            cp.style.top = cTop + 'px';
+            cp.style.height = '';
+        }
+
+        // Columnas inferiores: mide el alto natural de los bloques para que
+        // (Cámara+Monitor) y (VCam+Overlays) encajen dentro del área sin pasarse.
+        const colIds = ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'vcam-panel', 'stats-panel', 'overlay-panel'];
+        for (const id of colIds) {
             const el = document.getElementById(id);
-            if (!el) return;
-            el.style.left = rightX + 'px';
-            el.style.top = cy + 'px';
+            if (!el) continue;
             el.style.width = panelW + 'px';
             el.style.height = '';
-            cy += el.offsetHeight + pad;
-        });
+        }
+        const hOf = (id) => {
+            const el = document.getElementById(id);
+            return el ? (el.offsetHeight || 0) : 0;
+        };
+        const cameraH = hOf('camera-ctrl-panel');
+        const statsH = hOf('stats-panel');
+        const vcamH = hOf('vcam-panel');
+        const overlayH = hOf('overlay-panel');
+        const colSpan = Math.max(cameraH + gap + statsH, vcamH + gap + overlayH);
+
+        let rowTop = Math.min(655, area.h - pad - colSpan);
+        rowTop = clampNum(rowTop, 0, Math.max(0, area.h - pad - 240));
+
+        // Video: centrado arriba y bien grande; su borde inferior toca justo
+        // el borde superior de la fila de cuadros de abajo (rowTop).
+        let vpH = Math.max(200, rowTop - cTop - gap);
+        let vpw = Math.round(vpH * 16 / 9);
+        if (vpw > area.w - pad * 2) {
+            vpw = area.w - pad * 2;
+            vpH = Math.round(vpw * 9 / 16);
+        }
+        const vLeft = Math.max(8, Math.round((area.w - vpw) / 2));
+        assign('video-panel', vLeft, cTop, vpw, vpH);
+
+        assign('camera-ctrl-panel', colX(0), rowTop, panelW, null);
+        assign('image-ctrl-panel', colX(1), rowTop, panelW, area.h - pad - rowTop);
+        assign('beauty-panel', colX(2), rowTop, panelW, area.h - pad - rowTop);
+        assign('vcam-panel', colX(3), rowTop, panelW, null);
+        assign('stats-panel', colX(0), rowTop + cameraH + gap, panelW, null);
+        assign('overlay-panel', colX(3), rowTop + vcamH + gap, panelW, null);
     }
 
     function saveLayout() {
@@ -1457,12 +1528,25 @@ if (!state.vcamActive || !state.remoteStream) return;
             };
         });
         try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(out)); } catch (e) {}
+        try { localStorage.setItem(LAYOUT_VER_KEY, String(LAYOUT_VER)); } catch (e) {}
     }
 
     function loadLayout() {
-        defaultLayout();
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) {}
+        let useSaved = !!saved;
+        if (useSaved) {
+            try { useSaved = localStorage.getItem(LAYOUT_VER_KEY) === String(LAYOUT_VER); } catch (e) { useSaved = false; }
+            if (!useSaved) {
+                try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+                saved = null;
+            }
+        }
+        defaultLayout();
+        if (!useSaved) {
+            saveLayout();
+            return;
+        }
         const rect = document.getElementById('main').getBoundingClientRect();
         document.querySelectorAll('.win').forEach(el => {
             const r = saved && saved[el.id];
@@ -1489,7 +1573,6 @@ if (!state.vcamActive || !state.remoteStream) return;
         } else {
             centerConnectPanel();
         }
-        autoArrange();
         saveLayout();
     }
 
@@ -1928,21 +2011,19 @@ function snapDrag(x, y, el, main) {
             bindWindowResize(el);
         });
         window.addEventListener('resize', () => {
-            autoArrange();
-            const cp = document.getElementById('connect-panel');
-            if (cp && cp.style.display !== 'none') {
-                const cr = document.getElementById('main').getBoundingClientRect();
-                cp.style.left = clampNum(parseFloat(cp.style.left) || 8, 8, Math.max(8, cr.width - cp.offsetWidth - 8)) + 'px';
-                cp.style.top = clampNum(parseFloat(cp.style.top) || 8, 8, Math.max(8, cr.height - cp.offsetHeight - 8)) + 'px';
-            }
+            const cr = document.getElementById('main').getBoundingClientRect();
+            document.querySelectorAll('.win').forEach(el => {
+                if (el.style.display === 'none') return;
+                el.style.left = clampNum(parseFloat(el.style.left) || 8, 8, Math.max(8, cr.width - el.offsetWidth - 8)) + 'px';
+                el.style.top = clampNum(parseFloat(el.style.top) || 8, 8, Math.max(8, cr.height - el.offsetHeight - 8)) + 'px';
+            });
             saveLayout();
         });
         const resetBtn = document.getElementById('btn-reset-layout');
         if (resetBtn) resetBtn.addEventListener('click', () => {
             try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+            try { localStorage.removeItem(LAYOUT_VER_KEY); } catch (e) {}
             defaultLayout();
-            autoArrange();
-            centerConnectPanel();
             saveLayout();
         });
     }

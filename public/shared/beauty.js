@@ -104,7 +104,21 @@
         detTs: 0, landmarker: null, loading: null,
         prevLms: null, targetLms: null, curLms: null,
         landT0: 0, lastHit: 0, lastDet: 0,
-        outStream: null, outTrack: null
+        outStream: null, outTrack: null,
+        srcObject: null,
+        startPlayback(stream) {
+            beauty.srcObject = null;
+            if (stream && stream.getVideoTracks().length) {
+                beauty.srcObject = stream;
+                beauty.src.srcObject = stream;
+            } else if (beauty.rawTrack) {
+                const m = new MediaStream([beauty.rawTrack]);
+                beauty.srcObject = m;
+                beauty.src.srcObject = m;
+            }
+            const p = beauty.src.play && beauty.src.play();
+            if (p && p.catch) p.catch(() => {});
+        }
     };
 
     function ensureCanvas(w, h) {
@@ -123,6 +137,17 @@
             beauty.maskBlurCtx = beauty.maskBlur.getContext('2d');
         }
         beauty.canvas.width = W; beauty.canvas.height = H;
+    }
+
+    let domSlot;
+
+    function attachToDom(el) {
+        if (domSlot) return;
+        domSlot = document.createElement('div');
+        domSlot.setAttribute('aria-hidden', 'true');
+        domSlot.style.cssText = 'position:fixed;left:-9999px;top:0;width:4px;height:4px;overflow:hidden;opacity:0;z-index:-1;pointer-events:none;';
+        domSlot.appendChild(el);
+        (document.body || document.documentElement).appendChild(domSlot);
     }
 
     function ensureDetCanvas() {
@@ -275,8 +300,17 @@
         beauty.raf = requestAnimationFrame(loop);
         const s = beauty.rawStream;
         if (!s) return;
-        if (beauty.src.srcObject !== s) beauty.src.srcObject = s;
-        if (!beauty.src.videoWidth) return;
+        const hasRaw = beauty.rawTrack && beauty.rawTrack.readyState !== 'ended';
+        if (hasRaw && (!beauty.srcObject || !beauty.srcObject.getVideoTracks().length)) {
+            beauty.startPlayback(null);
+        } else if (beauty.srcObject !== s && s.getVideoTracks().length) {
+            beauty.startPlayback(s);
+        }
+        if (beauty.src.paused) {
+            const p = beauty.src.play && beauty.src.play();
+            if (p && p.catch) p.catch(() => {});
+        }
+        if (!beauty.src.videoWidth || !beauty.src.videoHeight) return;
         const vw = beauty.src.videoWidth, vh = beauty.src.videoHeight;
         if (!vw || !vh) return;
         ensureCanvas(vw, vh);
@@ -288,7 +322,9 @@
             if (beauty.landmarker && performance.now() - beauty.lastDet >= 33) {
                 beauty.lastDet = performance.now();
                 try {
-                    const res = beauty.landmarker.detectForVideo(ensureDetCanvas(), beauty.detTs += 33);
+                    const dc = ensureDetCanvas();
+                    beauty.detCtx.drawImage(beauty.canvas, 0, 0, dc.width, dc.height);
+                    const res = beauty.landmarker.detectForVideo(dc, beauty.detTs += 33);
                     const arr = res.faceLandmarks || [];
                     if (arr.length) {
                         const tgt = arr[0].map(p => ({ x: p.x, y: p.y }));
@@ -320,9 +356,15 @@
             if (!beauty.src) {
                 beauty.src = document.createElement('video');
                 beauty.src.muted = true;
-                beauty.src.setAttribute('playsinline', 'true');
+                beauty.src.playsInline = true;
+                beauty.src.setAttribute('playsinline', '');
+                beauty.src.setAttribute('webkit-playsinline', '');
                 beauty.src.autoplay = true;
+                attachToDom(beauty.src);
             }
+            beauty.srcObject = null;
+            beauty.src.srcObject = null;
+            beauty.startPlayback(beauty.rawStream);
             if (!beauty.canvas) ensureCanvas(1280, 720);
             if (beauty.params.faceMode) {
                 const ok = await ensureDetector();
@@ -373,6 +415,11 @@
             if (beauty.outStream) { try { beauty.outStream.getTracks().forEach(t => t.stop()); } catch (e) { /* noop */ } }
             beauty.outStream = null;
             beauty.outTrack = null;
+            if (beauty.src) {
+                try { beauty.src.pause(); } catch (e) { /* noop */ }
+                try { beauty.src.srcObject = null; } catch (e) { /* noop */ }
+            }
+            beauty.srcObject = null;
             beauty.targetLms = beauty.prevLms = beauty.curLms = null;
             return raw;
         }

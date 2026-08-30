@@ -58,6 +58,10 @@
     const resolutionLabel = $('#resolution-label');
     const statsOverlay = $('#stats-overlay');
     const settingsPanel = $('#settings-panel');
+    const beautyToggle = $('#beauty-toggle');
+    const beautySliders = $('#beauty-sliders');
+    const beautySmooth = $('#beauty-smooth');
+    const beautyGlow = $('#beauty-glow');
 
     // ─── Initialize ─────────────────────────────────────────
     function init() {
@@ -136,6 +140,30 @@
                 applyFilter(btn.dataset.value);
             });
         });
+
+        // Beauty on-device toggle
+        beautyToggle.addEventListener('click', () => {
+            applyBeautyConfig({ on: !state.beautyConfig.on });
+            syncBeautyUI();
+            emitBeautyToPC();
+        });
+
+        // Beauty sliders
+        beautySmooth.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            $('#beauty-smooth-value').textContent = val + '%';
+            applyBeautyConfig({ smooth: val });
+            emitBeautyToPC();
+        });
+
+        beautyGlow.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            $('#beauty-glow-value').textContent = val + '%';
+            applyBeautyConfig({ glow: val });
+            emitBeautyToPC();
+        });
+
+        syncBeautyUI();
 
         // Orientation buttons
         document.querySelectorAll('#orientation-group .toggle-btn').forEach(btn => {
@@ -408,6 +436,8 @@
 
             setupAudioProcessing();
             initWebRTC();
+
+            if (state.beautyConfig.on) await startBeauty();
 
         } catch (err) {
             console.error('Camera error:', err);
@@ -850,6 +880,7 @@
 
         state.socket.on('beauty-config', (data) => {
             applyBeautyConfig(data);
+            syncBeautyUI();
         });
     }
 
@@ -901,6 +932,25 @@
         } else if (state.beautyOn) {
             PhoneCamBeauty.configure(state.beautyConfig);
         }
+    }
+
+    function syncBeautyUI() {
+        const cfg = state.beautyConfig;
+        beautyToggle.classList.toggle('active', !!cfg.on);
+        beautyToggle.textContent = cfg.on ? 'Activado' : 'Desactivado';
+        beautySliders.style.display = cfg.on ? 'block' : 'none';
+        beautySmooth.value = cfg.smooth;
+        beautyGlow.value = cfg.glow;
+        $('#beauty-smooth-value').textContent = cfg.smooth + '%';
+        $('#beauty-glow-value').textContent = cfg.glow + '%';
+        beautySmooth.disabled = !cfg.on;
+        beautyGlow.disabled = !cfg.on;
+    }
+
+    function emitBeautyToPC() {
+        if (!state.socket) return;
+        const cfg = state.beautyConfig;
+        state.socket.emit('beauty-config', { on: cfg.on, smooth: cfg.smooth, glow: cfg.glow });
     }
 
     // ─── Battery Monitor ────────────────────────────────────
