@@ -106,6 +106,7 @@
                                 <button id="btn-mirror-v" class="vtool-btn" title="Espejo vertical">↕️</button>
                             </div>
                             <div class="toolbar-right">
+                                <button id="btn-beauty-quick" class="vtool-btn" title="Belleza (PC)" style="display:none;">✨</button>
                                 <button id="btn-screenshot" class="vtool-btn" title="Captura de pantalla">📷</button>
                                 <button id="btn-record" class="vtool-btn" title="Grabar">⏺️</button>
                                 <button id="btn-grid" class="vtool-btn" title="Guías de composición">▦</button>
@@ -133,6 +134,34 @@
                         <p class="obs-desc">Teléfonos conectados a esta sala por la red local.</p>
                         <div id="device-list" class="device-list">
                             <div class="device-empty">Buscando dispositivos...</div>
+                        </div>
+                    </div>
+                    <div class="win-resizer"></div>
+                </div>
+
+                <!-- Audio / Sound Visualizer -->
+                <div class="ctrl-panel win" id="audio-panel">
+                    <div class="ctrl-header">
+                        <h3>🎧 Audio del teléfono</h3>
+                        <span class="audio-badge" id="audio-badge">Sin señal</span>
+                    </div>
+                    <div class="ctrl-body">
+                        <canvas id="audio-canvas" class="audio-canvas" width="300" height="90"></canvas>
+                        <div class="audio-meta">
+                            <span>Nivel: <b id="audio-level">--</b></span>
+                            <span>Pico: <b id="audio-peak">--</b></span>
+                        </div>
+                        <div class="ctrl-buttons-row">
+                            <button id="btn-audio-enable" class="ctrl-action-btn">
+                                <span>📊</span> Visualizador
+                            </button>
+                            <button id="btn-audio-mute" class="ctrl-action-btn active">
+                                <span>🔊</span> Sonido
+                            </button>
+                        </div>
+                        <div class="ctrl-group">
+                            <label>Sensibilidad <span id="audio-sens-val">50%</span></label>
+                            <input type="range" id="audio-sens" min="0" max="100" value="50">
                         </div>
                     </div>
                     <div class="win-resizer"></div>

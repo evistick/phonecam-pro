@@ -37,7 +37,7 @@
         orientation: 'auto', // 'auto' | 'portrait' | 'landscape'
         blackout: false,
         beautyOn: false,
-        beautyConfig: { on: false, smooth: 70, glow: 50, sharp: 40, faceMode: true }
+        beautyConfig: { on: false, smooth: 85, glow: 62, sharp: 45, faceMode: true }
     };
 
     // ─── DOM Elements ───────────────────────────────────────
@@ -63,8 +63,11 @@
     const beautySmooth = $('#beauty-smooth');
     const beautyGlow = $('#beauty-glow');
     const beautySharp = $('#beauty-sharp');
+    const quickBeautyBtn = $('#btn-quick-beauty');
 
     // ─── Initialize ─────────────────────────────────────────
+    const LAST_ROOM_KEY = 'phonecam-last-room';
+
     function init() {
         // Pre-fill saved server IP in manual mode
         const savedServer = localStorage.getItem('phonecam-server');
@@ -80,6 +83,10 @@
             roomInput.value = roomFromUrl;
             state.roomId = roomFromUrl.toUpperCase();
             connect();
+        } else if (savedServer && savedRoom()) {
+            // Auto-reconnect: misma IP del PC y última sala que ya se usaron
+            showStatus('Reconectando a la sala anterior…', '');
+            connect(savedRoom());
         } else {
             // Start real-time QR scanner on mobile screen
             startQRScanner();
@@ -151,6 +158,13 @@
 
         // Beauty on-device toggle
         beautyToggle.addEventListener('click', () => {
+            applyBeautyConfig({ on: !state.beautyConfig.on });
+            syncBeautyUI();
+            emitBeautyToPC();
+        });
+
+        // Quick beauty on/off in the camera bar (dual with PC)
+        quickBeautyBtn.addEventListener('click', () => {
             applyBeautyConfig({ on: !state.beautyConfig.on });
             syncBeautyUI();
             emitBeautyToPC();
@@ -395,6 +409,11 @@
         });
     }
 
+    // ─── Last-room auto-reconnect ───────────────────────────
+    function savedRoom() {
+        try { return (localStorage.getItem(LAST_ROOM_KEY) || '').trim().toUpperCase(); } catch (e) { return null; }
+    }
+
     function connect(explicitRoom) {
         stopQRScanner();
 
@@ -426,6 +445,7 @@
         state.roomId = room;
         showStatus('Conectando...', '');
         connectBtn.disabled = true;
+        try { localStorage.setItem(LAST_ROOM_KEY, room); } catch (e) { /* noop */ }
 
         state.socket = io(serverUrl, {
             transports: ['websocket', 'polling'],
@@ -436,6 +456,7 @@
 
         state.socket.on('connect', () => {
             console.log('🔌 Socket connected');
+            registerDevice();
             state.socket.emit('join-room', { room: state.roomId, role: 'mobile' }, (response) => {
                 if (response.error) {
                     showStatus('Sala no encontrada. Verifica el código.', 'error');
@@ -760,6 +781,7 @@
         const cfg = state.beautyConfig;
         beautyToggle.classList.toggle('active', !!cfg.on);
         beautyToggle.textContent = cfg.on ? 'Activado' : 'Desactivado';
+        if (quickBeautyBtn) quickBeautyBtn.classList.toggle('active', !!cfg.on);
         beautySliders.style.display = cfg.on ? 'block' : 'none';
         beautySmooth.value = cfg.smooth;
         beautyGlow.value = cfg.glow;
@@ -1133,6 +1155,7 @@
         state.rtcs = {};
         state.knownPeers.clear();
         state.socket = null;
+        try { localStorage.removeItem(LAST_ROOM_KEY); } catch (e) { /* noop */ }
 
         cameraScreen.classList.remove('active');
         connectScreen.classList.add('active');

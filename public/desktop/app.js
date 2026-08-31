@@ -63,7 +63,13 @@
         maskBlur: null,
         maskBlurCtx: null,
         previewRAF: null,
-        dest: 'pc'
+        dest: 'pc',
+        audioCtx: null,
+        audioAnalyser: null,
+        audioRAF: null,
+        audioMuted: false,
+        audioSens: 50,
+        audioPeaks: []
     };
 
     // ─── DOM Elements ───────────────────────────────────────
@@ -80,6 +86,10 @@
     const deviceListEl = $('#device-list');
     const recordingIndicator = $('#recording-indicator');
     const recTimer = $('#rec-timer');
+    const audioCanvas = $('#audio-canvas');
+    const audioLevelText = $('#audio-level');
+    const audioBadge = $('#audio-badge');
+    const audioPeakText = $('#audio-peak');
 
     // ─── Initialize ─────────────────────────────────────────
     function init() {
@@ -118,6 +128,8 @@ state.socket.on('peer-joined', (data) => {
                 console.log('📱 Mobile peer left');
                 updateConnectionBadge('disconnected');
                 showVideoPanel(false);
+                state.remoteStream = null;
+                teardownAudioMonitor();
                 if (state.vcamActive) {
                     stopVirtualCamera(false);
                 }
@@ -297,6 +309,7 @@ state.socket.on('peer-joined', (data) => {
             remoteVideo.srcObject = stream;
             showVideoPanel(true);
             updateConnectionBadge('connected');
+            startAudioMonitor();
         };
 
         state.rtc.onConnectionStateChange = (connState) => {
@@ -416,15 +429,13 @@ state.socket.on('peer-joined', (data) => {
             state.vcamTimer = setInterval(() => {
 if (!state.vcamActive || !state.remoteStream) return;
                 state.vcamCtx.drawImage(remoteVideo, 0, 0, w, h);
-                if (state.dest !== 'phone') {
-                    if (state.beautyEnabled && state.smooth > 0) {
-                        detectFaces(state.vcamCanvas);
-                        if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
-                            paintSmooth(state.vcamCtx);
-                        }
-                    } else {
-                        smoothSkin(state.vcamCtx, w, h);
+                if (state.beautyEnabled && state.smooth > 0) {
+                    detectFaces(state.vcamCanvas);
+                    if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
+                        paintSmooth(state.vcamCtx);
                     }
+                } else {
+                    smoothSkin(state.vcamCtx, w, h);
                 }
                 const img = state.vcamCtx.getImageData(0, 0, w, h);
                 const nv12 = rgbaToNv12(img.data, w, h);
@@ -476,7 +487,7 @@ if (!state.vcamActive || !state.remoteStream) return;
 
     function emitBeautyConfig() {
         state.socket.emit('beauty-config', {
-            on: state.dest === 'phone' && state.beautyEnabled,
+            on: state.beautyEnabled,
             smooth: state.smooth,
             glow: state.glow,
             sharp: state.sharp,
@@ -487,11 +498,6 @@ if (!state.vcamActive || !state.remoteStream) return;
     function applyPreviewFilter() {
         const def = PHONECAM.FILTERS[state.currentFilter];
         let css = def && def.css !== 'none' ? def.css : '';
-        if (state.smooth > 0 && !state.faceMode && state.dest === 'pc') {
-            const s = state.smooth / 100;
-            const g = state.glow / 100;
-            css += (css ? ' ' : '') + 'blur(' + (s * 2).toFixed(2) + 'px) brightness(' + (1 + s * 0.05 + g * 0.12).toFixed(3) + ')';
-        }
         remoteVideo.style.filter = css;
     }
 
@@ -852,7 +858,7 @@ if (!state.vcamActive || !state.remoteStream) return;
     function drawFaceOverlay() {
         const vw = remoteVideo.videoWidth, vh = remoteVideo.videoHeight;
         const ov = $('#face-overlay');
-        if (!vw || !vh || !state.beautyEnabled || state.smooth <= 0 || state.dest === 'phone') {
+        if (!vw || !vh || !state.beautyEnabled || state.smooth <= 0) {
             ov.style.display = 'none';
             return;
         }
@@ -875,11 +881,11 @@ if (!state.vcamActive || !state.remoteStream) return;
     }
 
     function startPreviewLoop() {
-        if (state.previewRAF || state.dest !== 'pc' || !state.beautyEnabled || state.smooth <= 0) return;
+        if (state.previewRAF || !state.beautyEnabled || state.smooth <= 0) return;
         ensureFaceDetector().then((ok) => {
             if (!ok) return;
             if (state.previewRAF) return;
-            if (state.dest !== 'pc' || !state.beautyEnabled || state.smooth <= 0) return;
+            if (!state.beautyEnabled || state.smooth <= 0) return;
             const loop = () => {
                 drawFaceOverlay();
                 state.previewRAF = requestAnimationFrame(loop);
@@ -895,6 +901,190 @@ if (!state.vcamActive || !state.remoteStream) return;
         }
         const ov = $('#face-overlay');
         if (ov) ov.style.display = 'none';
+    }
+
+    // ─── Audio Visualizer (remote mic) ──────────────────────
+    function startAudioMonitor() {
+        if (state.audioRAF) return;
+        if (!state.remoteStream) return;
+        try {
+            if (!state.audioCtx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                state.audioCtx = new AC();
+            }
+            if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
+            if (!state.audioAnalyser) {
+                const src = state.audioCtx.createMediaStreamSource(state.remoteStream);
+                const analyser = state.audioCtx.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.75;
+                src.connect(analyser);
+                state.audioAnalyser = analyser;
+            }
+            const loop = () => {
+                const analyser = state.audioAnalyser;
+                if (!analyser || !audioCanvas) { state.audioRAF = null; return; }
+                drawAudioVisualizer(analyser);
+                state.audioRAF = requestAnimationFrame(loop);
+            };
+            state.audioRAF = requestAnimationFrame(loop);
+            if (audioBadge) audioBadge.textContent = '📡 EN VIVO';
+        } catch (err) {
+            console.warn('Audio visualizer error:', err);
+            if (audioBadge) audioBadge.textContent = '⛔ ERROR';
+        }
+    }
+
+    function stopAudioMonitor() {
+        if (state.audioRAF) {
+            cancelAnimationFrame(state.audioRAF);
+            state.audioRAF = null;
+        }
+        if (audioBadge) audioBadge.textContent = 'Sin señal';
+        if (audioLevelText) audioLevelText.textContent = '--';
+        if (audioPeakText) audioPeakText.textContent = '--';
+        if (audioCanvas) {
+            const c = audioCanvas;
+            const ctx = c.getContext('2d');
+            ctx.clearRect(0, 0, c.width, c.height);
+        }
+    }
+
+    function setAudioMuted(muted) {
+        state.audioMuted = muted;
+        if (remoteVideo) remoteVideo.muted = muted;
+        const btn = $('#btn-audio-mute');
+        if (btn) {
+            btn.classList.toggle('active', muted);
+            btn.innerHTML = muted ? '<span>🔇</span> Sonido' : '<span>🔊</span> Sonido';
+        }
+    }
+
+    function drawAudioVisualizer(analyser) {
+        if (!audioCanvas) return;
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = audioCanvas.clientWidth || 260;
+        const cssH = audioCanvas.clientHeight || 90;
+        const W = Math.round(cssW * dpr);
+        const H = Math.round(cssH * dpr);
+        if (audioCanvas.width !== W || audioCanvas.height !== H) {
+            audioCanvas.width = W;
+            audioCanvas.height = H;
+        }
+        const ctx = audioCanvas.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+
+        if (state.audioMuted || !state.remoteStream) {
+            ctx.fillStyle = 'rgba(127,127,127,0.55)';
+            ctx.font = (Math.round(11 * dpr)) + 'px JetBrains Mono, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(state.audioMuted ? 'MUTE' : 'SIN SEÑAL', W / 2, H / 2);
+            return;
+        }
+
+        const fft = analyser.frequencyBinCount;
+        const data = new Uint8Array(fft);
+        analyser.getByteTimeDomainData(data);
+
+        const sens = (state.audioSens || 50) / 100;
+        const gain = 3.2 + sens * 18;
+
+        // Level meter + peak
+        let peak = 0;
+        for (let i = 0; i < fft; i++) {
+            const v = (data[i] - 128) / 128;
+            const a = Math.abs(v);
+            if (a > peak) peak = a;
+        }
+        state.audioPeaks = state.audioPeaks || [];
+        state.audioPeaks.push(peak);
+        if (state.audioPeaks.length > 12) state.audioPeaks.shift();
+        const smoothPeak = state.audioPeaks.reduce((s, v) => s + v, 0) / state.audioPeaks.length;
+
+        if (audioLevelText) {
+            audioLevelText.textContent = (smoothPeak * 100).toFixed(0) + '%';
+            audioLevelText.style.color = smoothPeak > 0.75 ? 'var(--danger)' : (smoothPeak > 0.4 ? 'var(--warning)' : 'var(--success)');
+        }
+        if (audioPeakText) audioPeakText.textContent = smoothPeak > 0.02 ? (smoothPeak * 100).toFixed(0) + '%' : '--';
+
+        // Waveform
+        const cols = 80;
+        const step = Math.max(1, Math.floor(fft / cols));
+        const bw = W / cols;
+        const midY = H / 2;
+        ctx.strokeStyle = 'var(--accent)';
+        ctx.lineWidth = Math.max(1, Math.round(1.5 * dpr));
+        ctx.beginPath();
+        for (let i = 0; i <= cols; i++) {
+            let v = 0;
+            for (let k = 0; k < step; k++) {
+                const idx = i * step + k;
+                if (idx < fft) v += (data[idx] - 128) / 128;
+            }
+            v /= step;
+            const x = i * bw + bw / 2;
+            const y = midY - v * midY * Math.min(1.6, gain / 2);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Bars (frequency-style, mirrored)
+        const bars = Math.min(cols, 40);
+        const barStep = Math.floor(fft / bars);
+        const grad = ctx.createLinearGradient(0, H, 0, 0);
+        grad.addColorStop(0, 'var(--success)');
+        grad.addColorStop(0.6, 'var(--warning)');
+        grad.addColorStop(1, 'var(--danger)');
+        ctx.fillStyle = grad;
+        for (let i = 0; i < bars; i++) {
+            let v = 0;
+            for (let k = 0; k < barStep; k++) {
+                const idx = i * barStep + k;
+                if (idx < fft) v += Math.abs((data[idx] - 128) / 128);
+            }
+            v /= barStep;
+            const h = Math.min(H, v * H * Math.min(2.4, gain / 1.6));
+            const x = i * (W / bars) + 1;
+            ctx.fillRect(x, H - h, Math.max(1, W / bars - 2), h);
+        }
+    }
+
+    function initAudioControls() {
+        const enable = $('#btn-audio-enable');
+        const mute = $('#btn-audio-mute');
+        const sens = $('#audio-sens');
+
+        if (enable) {
+            enable.addEventListener('click', () => {
+                if (state.audioRAF) {
+                    stopAudioMonitor();
+                    return;
+                }
+                if (!state.remoteStream) {
+                    showToast('Conecta primero tu teléfono', 'error');
+                    return;
+                }
+                startAudioMonitor();
+            });
+        }
+        if (mute) {
+            mute.addEventListener('click', () => {
+                setAudioMuted(!state.audioMuted);
+            });
+        }
+        if (sens) {
+            sens.addEventListener('input', () => {
+                state.audioSens = parseInt(sens.value) || 50;
+                $('#audio-sens-val').textContent = state.audioSens + '%';
+                fillSlider(sens);
+            });
+        }
+        setAudioMuted(false);
+    }
+
+    function teardownAudioMonitor() {
+        stopAudioMonitor();
+        if (state.audioAnalyser) state.audioAnalyser = null;
     }
 
     // ─── UI Controls ────────────────────────────────────────
@@ -1056,13 +1246,32 @@ if (!state.vcamActive || !state.remoteStream) return;
             $('#d-glow').disabled = !state.beautyEnabled;
             $('#d-sharp').disabled = !state.beautyEnabled;
             lbl.textContent = state.beautyEnabled ? 'Activado' : 'Desactivado';
+            const qb = $('#btn-beauty-quick');
+            if (qb) qb.classList.toggle('active', state.beautyEnabled);
             if (state.beautyEnabled) {
-                if (state.dest === 'pc' && state.smooth > 0) startPreviewLoop();
+                if (state.smooth > 0) startPreviewLoop();
             } else {
                 stopPreviewLoop();
             }
-            emitBeautyConfig();
+            if (state.dest === 'phone') emitBeautyConfig();
         });
+
+        // Quick beauty toggle in the video toolbar
+        const qbBtn = $('#btn-beauty-quick');
+        if (qbBtn) {
+            qbBtn.addEventListener('click', () => {
+                $('#d-beauty-check').checked = !state.beautyEnabled;
+                $('#d-beauty-check').dispatchEvent(new Event('change'));
+                showToast(state.beautyEnabled ? '✨ Belleza del PC activada' : 'Belleza del PC desactivada', '');
+            });
+            // Reflect availability when the stream connects
+            state.socket.on('peer-joined', (data) => {
+                if (data.role === 'mobile') qbBtn.style.display = 'inline-flex';
+            });
+            state.socket.on('peer-left', (data) => {
+                if (data.role === 'mobile') qbBtn.style.display = 'none';
+            });
+        }
 
         // Processing destination: PC (local) or iPhone (on-device)
         document.querySelectorAll('#d-dest-group button').forEach(btn => {
@@ -1122,6 +1331,9 @@ if (!state.vcamActive || !state.remoteStream) return;
                 remoteVideo.style.backgroundColor = '#000';
             }
         });
+
+        // Audio panel controls (visualizer + mute + sensibilidad)
+        initAudioControls();
     }
 
     // ─── Video Controls ─────────────────────────────────────
@@ -1487,7 +1699,7 @@ if (!state.vcamActive || !state.remoteStream) return;
     // ─── Window Management ─────────────────────────────────
     const LAYOUT_KEY = 'phonecam-layout';
     const LAYOUT_VER_KEY = 'phonecam-layout-v';
-    const LAYOUT_VER = 3;
+    const LAYOUT_VER = 4;
 
     function getWindowArea() {
         const main = document.getElementById('main');
@@ -1558,7 +1770,7 @@ if (!state.vcamActive || !state.remoteStream) return;
 
         // Columnas inferiores: mide el alto natural de los bloques para que
         // (Cámara+Monitor) y (VCam+Overlays) encajen dentro del área sin pasarse.
-        const colIds = ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'vcam-panel', 'stats-panel', 'overlay-panel'];
+        const colIds = ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'vcam-panel', 'stats-panel', 'overlay-panel', 'audio-panel'];
         for (const id of colIds) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -1573,7 +1785,8 @@ if (!state.vcamActive || !state.remoteStream) return;
         const statsH = hOf('stats-panel');
         const vcamH = hOf('vcam-panel');
         const overlayH = hOf('overlay-panel');
-        const colSpan = Math.max(cameraH + gap + statsH, vcamH + gap + overlayH);
+        const audioH = hOf('audio-panel');
+        const colSpan = Math.max(cameraH + gap + statsH, vcamH + gap + overlayH + gap + audioH);
 
         let rowTop = Math.min(655, area.h - pad - colSpan);
         rowTop = clampNum(rowTop, 0, Math.max(0, area.h - pad - 240));
@@ -1595,6 +1808,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         assign('vcam-panel', colX(3), rowTop, panelW, null);
         assign('stats-panel', colX(0), rowTop + cameraH + gap, panelW, null);
         assign('overlay-panel', colX(3), rowTop + vcamH + gap, panelW, null);
+        assign('audio-panel', colX(3), rowTop + vcamH + overlayH + gap * 2, panelW, null);
     }
 
     function saveLayout() {
