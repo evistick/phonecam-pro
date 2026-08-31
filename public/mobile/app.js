@@ -38,6 +38,8 @@
         orientation: 'auto', // 'auto' | 'portrait' | 'landscape'
         blackout: false,
         beautyOn: false,
+        scanRetryTimer: null,
+        camRetryTimer: null,
         beautyConfig: { on: false, smooth: 85, glow: 62, sharp: 45, faceMode: true }
     };
 
@@ -201,6 +203,20 @@
         $('#btn-blackout').addEventListener('click', toggleBlackout);
         $('#blackout-overlay').addEventListener('click', toggleBlackout);
 
+        // iOS: getUserMedia requiere un toque del usuario para mostrar el prompt de permiso.
+        $('#scan-retry-btn').addEventListener('click', () => {
+            stopQRScanner();
+            hideScanRetry();
+            startQRScanner();
+        });
+        $('#cam-retry-btn').addEventListener('click', () => {
+            hideCamRetry();
+            if (state.stream) { try { state.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* noop */ } }
+            state.stream = null;
+            startCamera();
+        });
+        if (localVideo) localVideo.addEventListener('loadeddata', hideCamRetry);
+
         // Sliders
         $('#zoom-slider').addEventListener('input', (e) => {
             state.zoom = parseFloat(e.target.value);
@@ -243,12 +259,52 @@
     }
 
     // ─── Real-Time QR Scanner ───────────────────────────────
+    // iOS/WKWebView: getUserMedia necesita un gesto del usuario para mostrar el
+    // prompt de permiso. Si el arranque (sin gesto) no produce frames, se ofrece
+    // un botón de toque que reintenta la cámara.
+    function hideScanRetry() {
+        const ov = $('#scan-retry-overlay');
+        if (ov) ov.style.display = 'none';
+        if (state.scanRetryTimer) {
+            clearTimeout(state.scanRetryTimer);
+            state.scanRetryTimer = null;
+        }
+    }
+
+    function showScanRetry(msg) {
+        const lb = $('#scan-retry-msg');
+        if (lb) lb.textContent = msg || 'Toca para activar la cámara';
+        const ov = $('#scan-retry-overlay');
+        if (ov) ov.style.display = 'flex';
+    }
+
+    function hideCamRetry() {
+        const ov = $('#cam-retry-overlay');
+        if (ov) ov.style.display = 'none';
+        if (state.camRetryTimer) {
+            clearTimeout(state.camRetryTimer);
+            state.camRetryTimer = null;
+        }
+    }
+
+    function showCamRetry(msg) {
+        const lb = $('#cam-retry-msg');
+        if (lb) lb.textContent = msg || 'Toca para activar la cámara';
+        const ov = $('#cam-retry-overlay');
+        if (ov) ov.style.display = 'flex';
+    }
+
     async function startQRScanner() {
         if (state.isScanning) return;
         state.isScanning = true;
+        hideScanRetry();
+        if (state.scanAnimationId) {
+            cancelAnimationFrame(state.scanAnimationId);
+            state.scanAnimationId = null;
+        }
 
         try {
-            state.scannerStream = await navigator.mediaDevices.getUserMedia({
+            const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'environment',
                     width: { ideal: 1280 },
@@ -257,22 +313,40 @@
                 audio: false
             });
 
+            // Si lo cancelaron mientras esperábamos el permiso, no usar el stream.
+            if (!state.isScanning) {
+                try { stream.getTracks().forEach(t => t.stop()); } catch (e) { /* noop */ }
+                return;
+            }
+            if (state.scannerStream) {
+                try { state.scannerStream.getTracks().forEach(t => t.stop()); } catch (e) { /* noop */ }
+            }
+            state.scannerStream = stream;
+
             scannerVideo.srcObject = state.scannerStream;
             scannerVideo.setAttribute('playsinline', 'true');
             await scannerVideo.play();
 
             scanQRCodeFrame();
+
+            // Si el permiso aún no se concedió (sin gesto), la cámara no entrega frames:
+            // ofrecer un botón para reintentar con un toque.
+            state.scanRetryTimer = setTimeout(() => {
+                if (scannerVideo.readyState < scannerVideo.HAVE_ENOUGH_DATA) {
+                    showScanRetry('Toca para activar la cámara y escanear el QR');
+                }
+            }, 2200);
         } catch (err) {
             console.warn('Scanner camera error:', err);
-            // Fallback to manual code entry
-            scannerContainer.style.display = 'none';
-            manualContainer.style.display = 'block';
-            showStatus('Acceso a cámara requerido para escanear QR', 'error');
+            // Mantener la pantalla del escáner y reintentar con un toque.
+            // La opción de código manual sigue disponible debajo.
+            showScanRetry('Se necesita el permiso de la cámara para escanear el QR');
         }
     }
 
     function stopQRScanner() {
         state.isScanning = false;
+        hideScanRetry();
         if (state.scanAnimationId) {
             cancelAnimationFrame(state.scanAnimationId);
             state.scanAnimationId = null;
@@ -287,6 +361,7 @@
         if (!state.isScanning) return;
 
         if (scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA) {
+            hideScanRetry();
             const canvas = scannerCanvas;
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
@@ -508,6 +583,13 @@
 
             connectScreen.classList.remove('active');
             cameraScreen.classList.add('active');
+
+            hideCamRetry();
+            state.camRetryTimer = setTimeout(() => {
+                if (localVideo && !localVideo.videoWidth) {
+                    showCamRetry('Toca para activar la cámara');
+                }
+            }, 2200);
 
             detectCapabilities();
 
