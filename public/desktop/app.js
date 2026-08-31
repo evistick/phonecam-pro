@@ -1699,7 +1699,7 @@ if (!state.vcamActive || !state.remoteStream) return;
     // ─── Window Management ─────────────────────────────────
     const LAYOUT_KEY = 'phonecam-layout';
     const LAYOUT_VER_KEY = 'phonecam-layout-v';
-    const LAYOUT_VER = 4;
+    const LAYOUT_VER = 5;
 
     function getWindowArea() {
         const main = document.getElementById('main');
@@ -1743,8 +1743,8 @@ if (!state.vcamActive || !state.remoteStream) return;
         const area = getWindowArea();
         const pad = 8;
         const gap = 8;
-        const cols = 4;
-        const panelW = clampNum(Math.floor((area.w - pad * 2 - gap * (cols - 1)) / cols), 280, 500);
+        const cols = 5;
+        const panelW = clampNum(Math.floor((area.w - pad * 2 - gap * (cols - 1)) / cols), 200, 500);
         const colX = (i) => Math.round(pad + i * (panelW + gap));
         const assign = (id, x, y, w, h) => {
             const el = document.getElementById(id);
@@ -1768,9 +1768,18 @@ if (!state.vcamActive || !state.remoteStream) return;
             cp.style.height = '';
         }
 
-        // Columnas inferiores: mide el alto natural de los bloques para que
-        // (Cámara+Monitor) y (VCam+Overlays) encajen dentro del área sin pasarse.
-        const colIds = ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'vcam-panel', 'stats-panel', 'overlay-panel', 'audio-panel'];
+        // Dispositivos (red): arriba a la izquierda, junto al video.
+        const devices = document.getElementById('devices-panel');
+        if (devices) {
+            devices.style.width = '402px';
+            devices.style.left = pad + 'px';
+            devices.style.top = pad + 'px';
+            devices.style.height = '';
+        }
+
+        // Fila inferior de 5 columnas:
+        // [Cámara + Monitoreo] [Imagen] [Belleza] [Audio del teléfono] [VCam + Overlays]
+        const colIds = ['camera-ctrl-panel', 'image-ctrl-panel', 'beauty-panel', 'audio-panel', 'vcam-panel', 'stats-panel', 'overlay-panel'];
         for (const id of colIds) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -1786,13 +1795,12 @@ if (!state.vcamActive || !state.remoteStream) return;
         const vcamH = hOf('vcam-panel');
         const overlayH = hOf('overlay-panel');
         const audioH = hOf('audio-panel');
-        const colSpan = Math.max(cameraH + gap + statsH, vcamH + gap + overlayH + gap + audioH);
+        const colSpan = Math.max(cameraH + gap + statsH, audioH, vcamH + gap + overlayH);
 
         let rowTop = Math.min(655, area.h - pad - colSpan);
-        rowTop = clampNum(rowTop, 0, Math.max(0, area.h - pad - 240));
+        rowTop = clampNum(rowTop, 0, Math.max(0, area.h - pad - 280));
 
-        // Video: centrado arriba y bien grande; su borde inferior toca justo
-        // el borde superior de la fila de cuadros de abajo (rowTop).
+        // Video: centrado arriba; su borde inferior toca justo la fila inferior.
         let vpH = Math.max(200, rowTop - cTop - gap);
         let vpw = Math.round(vpH * 16 / 9);
         if (vpw > area.w - pad * 2) {
@@ -1803,12 +1811,12 @@ if (!state.vcamActive || !state.remoteStream) return;
         assign('video-panel', vLeft, cTop, vpw, vpH);
 
         assign('camera-ctrl-panel', colX(0), rowTop, panelW, null);
+        assign('stats-panel', colX(0), rowTop + cameraH + gap, panelW, null);
         assign('image-ctrl-panel', colX(1), rowTop, panelW, area.h - pad - rowTop);
         assign('beauty-panel', colX(2), rowTop, panelW, area.h - pad - rowTop);
-        assign('vcam-panel', colX(3), rowTop, panelW, null);
-        assign('stats-panel', colX(0), rowTop + cameraH + gap, panelW, null);
-        assign('overlay-panel', colX(3), rowTop + vcamH + gap, panelW, null);
-        assign('audio-panel', colX(3), rowTop + vcamH + overlayH + gap * 2, panelW, null);
+        assign('audio-panel', colX(3), rowTop, panelW, null);
+        assign('vcam-panel', colX(4), rowTop, panelW, null);
+        assign('overlay-panel', colX(4), rowTop + vcamH + gap, panelW, null);
     }
 
     function saveLayout() {
@@ -1830,6 +1838,9 @@ if (!state.vcamActive || !state.remoteStream) return;
     function loadLayout() {
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch (e) {}
+        // Conserva el layout previo antes de cualquier migración de versión para
+        // que un cambio de versión no mueva video ni "conectar teléfono" (ni el resto).
+        const prevSaved = saved;
         let useSaved = !!saved;
         if (useSaved) {
             try { useSaved = localStorage.getItem(LAYOUT_VER_KEY) === String(LAYOUT_VER); } catch (e) { useSaved = false; }
@@ -1838,15 +1849,10 @@ if (!state.vcamActive || !state.remoteStream) return;
                 saved = null;
             }
         }
-        defaultLayout();
-        if (!useSaved) {
-            saveLayout();
-            return;
-        }
-        const rect = document.getElementById('main').getBoundingClientRect();
-        document.querySelectorAll('.win').forEach(el => {
-            const r = saved && saved[el.id];
-            if (!r || !r.w) return;
+        const rrect = () => document.getElementById('main').getBoundingClientRect();
+        const applySavedRect = (el, r) => {
+            if (!el || !r || !r.w) return;
+            const rect = rrect();
             if (el.id === 'connect-panel') {
                 el.style.width = clampNum(r.w, 320, Math.max(320, rect.width - 16)) + 'px';
                 if (r.h) el.style.height = r.h + 'px';
@@ -1860,16 +1866,40 @@ if (!state.vcamActive || !state.remoteStream) return;
                 if (r.h) el.style.height = r.h + 'px';
                 else el.style.height = '';
             }
-        });
-        const cp = document.getElementById('connect-panel');
-        const sr = saved && saved['connect-panel'];
-        if (cp && sr && sr.w) {
-            cp.style.left = clampNum(sr.x || 0, 8, Math.max(8, rect.width - cp.offsetWidth - 8)) + 'px';
-            cp.style.top = clampNum(sr.y || 0, 8, Math.max(8, rect.height - cp.offsetHeight - 8)) + 'px';
-        } else {
-            centerConnectPanel();
+            el.style.left = clampNum(r.x || 0, 8, Math.max(8, rect.width - el.offsetWidth - 8)) + 'px';
+            el.style.top = clampNum(r.y || 0, 8, Math.max(8, rect.height - el.offsetHeight - 8)) + 'px';
+        };
+        defaultLayout();
+        // Reaplica el layout previo sobre el nuevo default en migraciones,
+        // para que nada se mueva al cambiar la versión.
+        if (prevSaved && !useSaved) {
+            document.querySelectorAll('.win').forEach(el => {
+                applySavedRect(el, prevSaved[el.id]);
+            });
+            centerConnectPanelIfUnsaved();
+            saveLayout();
+            return;
         }
+        if (!useSaved) {
+            centerConnectPanelIfUnsaved();
+            saveLayout();
+            return;
+        }
+        document.querySelectorAll('.win').forEach(el => {
+            const r = saved && saved[el.id];
+            if (!r || !r.w) return;
+            applySavedRect(el, r);
+        });
+        centerConnectPanelIfUnsaved();
         saveLayout();
+    }
+
+    function centerConnectPanelIfUnsaved() {
+        const cp = document.getElementById('connect-panel');
+        const saved = (() => { try { return JSON.parse(localStorage.getItem('phonecam-layout') || 'null'); } catch (e) { return null; } })();
+        const sr = saved && saved['connect-panel'];
+        if (cp && sr && sr.w) return;
+        centerConnectPanel();
     }
 
     function centerConnectPanel() {
