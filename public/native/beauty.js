@@ -65,7 +65,7 @@
         underMask: null, underMaskCtx: null, underMaskBlur: null, underMaskBlurCtx: null,
         detCanvas: null, detCtx: null,
         detTs: 0, landmarker: null, loading: null,
-        prevLms: null, targetLms: null, curLms: null,
+        prevLms: null, targetLms: null, curLms: null, smoothLms: null,
         landT0: 0, lastHit: 0, lastDet: 0,
         outStream: null, outTrack: null,
         srcObject: null,
@@ -127,8 +127,9 @@
     }
 
     function ensureDetCanvas() {
-        // 384px: mejor resolución para landmarks precisos de ojos/nariz/boca
-        const dw = 384;
+        // 512px: alta resolución para landmarks precisos de ojos/nariz/boca.
+        // Mayor que antes (384) → menos sub-muestreo, landmarks más estables en rasgos finos.
+        const dw = 512;
         const dh = Math.max(30, Math.round(dw * beauty.height / beauty.width));
         if (!beauty.detCanvas) {
             beauty.detCanvas = document.createElement('canvas');
@@ -164,17 +165,30 @@
     function interpolatedLms() {
         const now = performance.now();
         if (!beauty.targetLms) return null;
-        if (now - beauty.lastHit > 130) {
-            beauty.targetLms = null; beauty.prevLms = null; beauty.curLms = null;
+        if (now - beauty.lastHit > 160) {
+            beauty.targetLms = null; beauty.prevLms = null; beauty.curLms = null; beauty.smoothLms = null;
             return null;
         }
         const prog = Math.min(1, (now - beauty.landT0) / 55);
         const ease = 1 - Math.pow(1 - prog, 3);
         const t = beauty.targetLms, p = beauty.prevLms || t;
-        beauty.curLms = t.map((pt, i) => {
+        const raw = t.map((pt, i) => {
             const pp = p[i] || pt;
             return { x: pp.x + (pt.x - pp.x) * ease, y: pp.y + (pt.y - pp.y) * ease };
         });
+        // Low-pass exponencial adicional sobre la posición interpolada para
+        // reducir el jitter de alta frecuencia (temblor) de los landmarks.
+        if (!beauty.smoothLms) {
+            beauty.smoothLms = raw.map(pt => ({ x: pt.x, y: pt.y }));
+        } else {
+            const alpha = 0.4; // más bajo = más suave pero algo más lento
+            for (let i = 0; i < raw.length; i++) {
+                const s = beauty.smoothLms[i], r = raw[i];
+                s.x += (r.x - s.x) * alpha;
+                s.y += (r.y - s.y) * alpha;
+            }
+        }
+        beauty.curLms = beauty.smoothLms;
         return beauty.curLms;
     }
 
@@ -241,7 +255,7 @@
         pK.clearRect(0, 0, W, H);
         pK.drawImage(beauty.canvas, 0, 0, W, H);
 
-        const mw = Math.round(W / 3), mh = Math.round(H / 3);
+        const mw = Math.round(W / 2.2), mh = Math.round(H / 2.2);
         if (beauty.maskCanvas.width !== mw) {
             beauty.maskCanvas.width = mw; beauty.maskCanvas.height = mh;
             beauty.maskBlur.width = mw; beauty.maskBlur.height = mh;
@@ -284,7 +298,7 @@
 
         const mb = beauty.maskBlurCtx;
         mb.clearRect(0, 0, mw, mh);
-        mb.filter = 'blur(' + Math.max(2, Math.round(mh / 32)) + 'px)';
+        mb.filter = 'blur(' + Math.max(2, Math.round(mh / 22)) + 'px)';
         mb.drawImage(beauty.maskCanvas, 0, 0);
         mb.filter = 'none';
         m.clearRect(0, 0, mw, mh);
@@ -405,12 +419,12 @@
         beauty.ctx.drawImage(beauty.src, 0, 0, beauty.width, beauty.height);
         if (!beauty.params.smooth && !beauty.params.glow) return;
         if (beauty.params.faceMode) {
-            if (beauty.landmarker && performance.now() - beauty.lastDet >= 33) {
+            if (beauty.landmarker && performance.now() - beauty.lastDet >= 25) {
                 beauty.lastDet = performance.now();
                 try {
                     const dc = ensureDetCanvas();
                     beauty.detCtx.drawImage(beauty.canvas, 0, 0, dc.width, dc.height);
-                    const res = beauty.landmarker.detectForVideo(dc, beauty.detTs += 33);
+                    const res = beauty.landmarker.detectForVideo(dc, beauty.detTs += 25);
                     const arr = res.faceLandmarks || [];
                     if (arr.length) {
                         const tgt = arr[0].map(p => ({ x: p.x, y: p.y }));
@@ -507,7 +521,7 @@
                 try { beauty.src.srcObject = null; } catch (e) { /* noop */ }
             }
             beauty.srcObject = null;
-            beauty.targetLms = beauty.prevLms = beauty.curLms = null;
+            beauty.targetLms = beauty.prevLms = beauty.curLms = beauty.smoothLms = null;
             return raw;
         }
     };

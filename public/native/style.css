@@ -163,6 +163,18 @@ html, body {
     z-index: 10;
 }
 
+/* Tela oscura que cubre toda la pantalla del escáner para no ver la cámara en crudo */
+.scanner-dim {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.62) 100%);
+    z-index: 5;
+    pointer-events: none;
+}
+
 .scanner-header {
     position: relative;
     z-index: 2;
@@ -625,11 +637,11 @@ html, body {
 #controls-bar {
     position: absolute;
     left: 50%;
-    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: 999px;
     z-index: 25;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06));
@@ -647,7 +659,7 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 
 .ctrl-btn {
@@ -662,15 +674,15 @@ html, body {
     align-items: center;
     justify-content: center;
     gap: 2px;
-    width: 58px;
-    height: 58px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 .ctrl-btn span {
-    font-size: 22px;
+    font-size: 18px;
     line-height: 1;
 }
 
@@ -976,15 +988,16 @@ body.ui-hidden #stats-overlay {
 /* Landscape optimizations */
 @media (orientation: landscape) {
     #controls-bar {
-        padding: 6px 10px;
+        padding: 5px 8px;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     }
 
     .ctrl-btn {
-        width: 50px;
-        height: 50px;
+        width: 42px;
+        height: 42px;
     }
 
     .ctrl-btn span {
-        font-size: 20px;
+        font-size: 16px;
     }
 }
