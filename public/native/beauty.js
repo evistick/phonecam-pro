@@ -279,7 +279,9 @@
         };
 
         // 1) Toda la cara (frente, mejillas, mandíbula): suavizado completo.
-        const oval = expandPoly(convexHull(ringPts(FACE_OVAL_RING)), 1.04);
+        //    Se expande muy poco para que el borde coincida con el contorno del
+        //    rostro y no invada el fondo ni el cabello (evita borde de "máscara").
+        const oval = expandPoly(convexHull(ringPts(FACE_OVAL_RING)), 1.02);
         fillPoly(oval, 255);
 
         // 2) Rasgos a proteger con transición suave: cejas y ojos (duras),
@@ -326,7 +328,7 @@
         ctx.save();
         ctx.globalCompositeOperation = 'source-over';
         if (smoothK > 0) {
-            ctx.globalAlpha = 0.4 + smoothK * 0.55;
+            ctx.globalAlpha = 0.35 + smoothK * 0.5;
             ctx.drawImage(beauty.skinLayer, 0, 0, sw, sh, 0, 0, W, H);
         }
 
@@ -440,8 +442,13 @@
                     }
                 } catch (e) { /* noop */ }
             }
+            // buildFaceLayer() ya retorna sin tocar la imagen si no hay cara
+            // detectada (belleza recién activada o cara fuera de cuadro), así el
+            // suavizado NUNCA se aplica a todo el frame por error.
             buildFaceLayer();
-        } else {
+        } else if (beauty.params.smooth || beauty.params.glow) {
+            // Fallback sin detección de rostro solo si se pidió explícitamente
+            // desactivar el modo cara (p.ej. filtro "suavizar todo el video").
             wholeFrameSmooth();
         }
     }
