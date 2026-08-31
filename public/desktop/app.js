@@ -429,7 +429,12 @@ state.socket.on('peer-joined', (data) => {
             state.vcamTimer = setInterval(() => {
 if (!state.vcamActive || !state.remoteStream) return;
                 state.vcamCtx.drawImage(remoteVideo, 0, 0, w, h);
-                if (state.beautyEnabled && state.smooth > 0) {
+                // Cuando el iPhone hace el filtro on-device (dest === 'phone'), la
+                // señal ya llega procesada: la cámara virtual la pasa tal cual, sin
+                // re-suavizar en la PC (evita que el efecto se duplique).
+                if (state.dest === 'phone') {
+                    // pasa la señal del iPhone sin procesar
+                } else if (state.beautyEnabled && state.smooth > 0) {
                     detectFaces(state.vcamCanvas);
                     if (state.faceLms && buildSmoothLayer(state.vcamCanvas, w, h)) {
                         paintSmooth(state.vcamCtx);
@@ -639,15 +644,19 @@ if (!state.vcamActive || !state.remoteStream) return;
         return out;
     }
 
-    // Canonical MediaPipe Face Mesh index groups (468-pt topology)
-    const FACE_HOLES = [
-        { idxs: [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246], margin: 1.7 },
-        { idxs: [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398], margin: 1.7 },
-        { idxs: [70, 63, 105, 66, 107, 55, 65, 52, 53, 46], margin: 1.45 },
-        { idxs: [300, 293, 334, 296, 336, 285, 295, 282, 283, 276], margin: 1.45 },
-        { idxs: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 42, 183, 78], margin: 1.4 },
-        { idxs: [1, 2, 98, 327, 4, 5, 197, 195, 168], margin: 1.75 }
-    ];
+    // Contorno completo del rostro (frente → sienes → mandíbula → barbilla) en orden.
+    const FACE_OVAL_RING = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+    // Nariz: puente + alas + puntas (los orificios se extraen aparte).
+    const NOSE_RING_IDX = [168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 98, 327, 326, 328, 289, 298, 331, 309, 3, 51, 218, 219, 220, 115, 48, 64, 98, 2];
+    const NOSTRIL_IDX = [2, 97, 98, 327, 326, 328, 129, 206, 209, 198, 217];
+    // Ojos: contorno completo para tallar con borde suave.
+    const EYE_LEFT_IDX = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+    const EYE_RIGHT_IDX = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+    // Cejas: banda horizontal para tallar junto con el ojo dejando piel arriba.
+    const BROW_LEFT_IDX = [55, 65, 52, 53, 46, 105, 66, 107];
+    const BROW_RIGHT_IDX = [285, 295, 282, 283, 276, 334, 296, 336];
+    // Boca: labios completos.
+    const MOUTH_IDX = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 42, 183, 78];
 
     function expandPoly(pts, f) {
         let cx = 0, cy = 0;
@@ -666,72 +675,7 @@ if (!state.vcamActive || !state.remoteStream) return;
         ctx.fill();
     }
 
-    // --- Delaunay triangulation (Bowyer-Watson) over the 478 face landmarks ---
-    const meshTriCache = {};
-
-    function delaunay(pts) {
-        const n = pts.length;
-        const EPS = 1e-9;
-        let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-        for (let i = 0; i < n; i++) {
-            const p = pts[i];
-            if (p.x < minx) minx = p.x;
-            if (p.y < miny) miny = p.y;
-            if (p.x > maxx) maxx = p.x;
-            if (p.y > maxy) maxy = p.y;
-        }
-        const dx = (maxx - minx) || 1, dy = (maxy - miny) || 1;
-        const dmax = Math.max(dx, dy) * 10;
-        const midx = (minx + maxx) / 2, midy = (miny + maxy) / 2;
-        const P = pts.concat([
-            { x: midx - dmax, y: midy - dmax },
-            { x: midx, y: midy + dmax },
-            { x: midx + dmax, y: midy - dmax }
-        ]);
-        let tris = [{ a: n, b: n + 1, c: n + 2 }];
-        const inCirc = (a, b, c, p) => {
-            const ax = P[a].x, ay = P[a].y, bx = P[b].x, by = P[b].y, cx = P[c].x, cy = P[c].y;
-            const px = p.x, py = p.y;
-            const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-            if (Math.abs(d) < 1e-12) return false;
-            const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
-            const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
-            const r2 = (ux - ax) * (ux - ax) + (uy - ay) * (uy - ay);
-            return (ux - px) * (ux - px) + (uy - py) * (uy - py) <= r2 + EPS;
-        };
-        for (let i = 0; i < n; i++) {
-            const p = P[i];
-            const bad = [], next = [];
-            for (const t of tris) {
-                if (inCirc(t.a, t.b, t.c, p)) bad.push(t); else next.push(t);
-            }
-            const edges = new Map();
-            const key = (e1, e2) => e1 < e2 ? e1 + '_' + e2 : e2 + '_' + e1;
-            for (const t of bad) {
-                for (const [e1, e2] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]]) {
-                    const k = key(e1, e2);
-                    if (edges.has(k)) { const v = edges.get(k); v.c += 1; if (v.c >= 2) edges.delete(k); }
-                    else edges.set(k, { c: 1, e1, e2 });
-                }
-            }
-            for (const [k, v] of edges) next.push({ a: v.e1, b: v.e2, c: i });
-            tris = next;
-        }
-        const out = [];
-        for (const t of tris) {
-            if (t.a < n && t.b < n && t.c < n) out.push([t.a, t.b, t.c]);
-        }
-        return out;
-    }
-
-    function inPoly(px, py, poly) {
-        let inside = false;
-        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-            const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
-            if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
-        }
-        return inside;
-    }
+    // --- Máscara facial: se construye con el contorno del rostro + rasgos ---
 
     function buildSmoothLayer(source, w, h) {
         const lands = getLands();
@@ -775,39 +719,35 @@ if (!state.vcamActive || !state.remoteStream) return;
         lctx.imageSmoothingEnabled = true;
         lctx.drawImage(state.smoothCanvas, 0, 0, w, h);
 
-        // Mask = real triangular skin mesh (Delaunay over landmarks), holes excluded by topology
+        // Máscara de "cara completa": contorno del rostro + rasgos con borde suave.
         const m = state.maskCtx;
         m.clearRect(0, 0, mw, mh);
         m.filter = 'none';
         m.fillStyle = '#fff';
         for (const lms of lands) {
-            const cnt = lms.length;
-            if (!(cnt in meshTriCache)) meshTriCache[cnt] = delaunay(lms);
-            const tris = meshTriCache[cnt];
-            const oval = expandPoly(convexHull(lms.map(p => [p.x, p.y])), 1.05);
-            const feats = [];
-            for (const f of FACE_HOLES) {
-                if (!f.idxs.every(i => i < cnt)) continue;
-                feats.push(expandPoly(convexHull(f.idxs.map(i => [lms[i].x, lms[i].y])), 1.3));
-            }
-            for (const t of tris) {
-                const a = lms[t[0]], b = lms[t[1]], c = lms[t[2]];
-                const e1 = (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
-                const e2 = (a.x - c.x) * (a.x - c.x) + (a.y - c.y) * (a.y - c.y);
-                const e3 = (b.x - c.x) * (b.x - c.x) + (b.y - c.y) * (b.y - c.y);
-                if (e1 > 0.08 || e2 > 0.08 || e3 > 0.08) continue;
-                const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3;
-                if (!inPoly(cx, cy, oval)) continue;
-                let skip = false;
-                for (const f of feats) {
-                    if (inPoly(a.x, a.y, f) || inPoly(b.x, b.y, f) || inPoly(c.x, c.y, f)) { skip = true; break; }
-                }
-                if (skip) continue;
-                fp3(m, a, b, c, mw, mh);
-            }
+            const ringPts = (idxs) => idxs.map(i => [lms[i].x * mw, lms[i].y * mh]);
+            // Toda la cara (frente, mejillas, mandíbula): suavizado completo.
+            fillPoly(m, expandPoly(convexHull(ringPts(FACE_OVAL_RING)), 1.04), mw, mh);
+            // Rasgos a proteger con transición suave: cejas y ojos (duras),
+            // boca (mediana) y nariz (muy leve).
+            m.fillStyle = '#000';
+            fillPoly(m, expandPoly(convexHull(ringPts(BROW_LEFT_IDX)), 1.3), mw, mh);
+            fillPoly(m, expandPoly(convexHull(ringPts(BROW_RIGHT_IDX)), 1.3), mw, mh);
+            fillPoly(m, expandPoly(convexHull(ringPts(EYE_LEFT_IDX)), 1.3), mw, mh);
+            fillPoly(m, expandPoly(convexHull(ringPts(EYE_RIGHT_IDX)), 1.3), mw, mh);
+            fillPoly(m, expandPoly(convexHull(ringPts(MOUTH_IDX)), 1.35), mw, mh);
+            // Nariz: leve suavizado (gris) para que el puente y las alas se
+            // noten filtradas pero sin el aspecto "parche" de las zonas duras.
+            m.globalAlpha = 0.42;
+            m.fillStyle = '#000';
+            fillPoly(m, expandPoly(convexHull(ringPts(NOSE_RING_IDX)), 1.05), mw, mh);
+            m.globalAlpha = 1;
+            m.fillStyle = '#000';
+            fillPoly(m, expandPoly(convexHull(ringPts(NOSTRIL_IDX)), 1.2), mw, mh);
         }
+        m.fillStyle = '#fff';
 
-        // Single-pass feather of the whole mask (brushes the triangle edges softly)
+        // Single-pass feather of the whole mask (suaviza los bordes de rasgos
         if (!state.maskBlur) {
             state.maskBlur = document.createElement('canvas');
             state.maskBlurCtx = state.maskBlur.getContext('2d');
@@ -828,15 +768,6 @@ if (!state.vcamActive || !state.remoteStream) return;
         lctx.drawImage(state.maskCanvas, 0, 0, w, h);
         lctx.globalCompositeOperation = 'source-over';
         return true;
-    }
-
-    function fp3(ctx, a, b, c, sx, sy) {
-        ctx.beginPath();
-        ctx.moveTo(a.x * sx, a.y * sy);
-        ctx.lineTo(b.x * sx, b.y * sy);
-        ctx.lineTo(c.x * sx, c.y * sy);
-        ctx.closePath();
-        ctx.fill();
     }
 
     function paintSmooth(ctx) {
