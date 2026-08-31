@@ -80,12 +80,9 @@
             roomInput.value = roomFromUrl;
             state.roomId = roomFromUrl.toUpperCase();
             connect();
-        } else if (savedRoom()) {
-            // Auto-reconnect: arranca directo a la última sala usada
-            showStatus('Reconectando a la sala anterior…', '');
-            connect(savedRoom());
         } else {
-            // Start real-time QR scanner on mobile screen
+            // Siempre arrancar en el escáner de QR. La conexión se decide al
+            // escanear el QR del PC o al seleccionar el iPhone desde el desktop.
             startQRScanner();
         }
 

@@ -87,12 +87,9 @@ facingMode: 'environment', // 'user' or 'environment'
             roomInput.value = roomFromUrl;
             state.roomId = roomFromUrl.toUpperCase();
             connect();
-        } else if (savedServer && savedRoom()) {
-            // Auto-reconnect: misma IP del PC y última sala que ya se usaron
-            showStatus('Reconectando a la sala anterior…', '');
-            connect(savedRoom());
         } else {
-            // Start real-time QR scanner on mobile screen
+            // Siempre arrancar en el escáner de QR. La conexión se decide al
+            // escanear el QR del PC o al seleccionar el iPhone desde el desktop.
             startQRScanner();
         }
 
