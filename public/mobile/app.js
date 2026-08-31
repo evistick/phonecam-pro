@@ -303,6 +303,16 @@
             state.scanAnimationId = null;
         }
 
+        // Vigilancia de salud programada ANTES de getUserMedia: en iOS esa promesa
+        // puede quedar colgada hasta que el usuario toque (sin gesto no se muestra
+        // el prompt de permiso). El timer debe dispararse igual para ofrecer el botón.
+        state.scanRetryTimer = setTimeout(() => {
+            if (!state.isScanning) return;
+            if (!scannerVideo.videoWidth || scannerVideo.readyState < scannerVideo.HAVE_ENOUGH_DATA) {
+                showScanRetry('Toca para activar la cámara y escanear el QR');
+            }
+        }, 2500);
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
@@ -327,15 +337,11 @@
             scannerVideo.setAttribute('playsinline', 'true');
             await scannerVideo.play();
 
+            if (!state.isScanning) return;
             scanQRCodeFrame();
 
             // Si el permiso aún no se concedió (sin gesto), la cámara no entrega frames:
-            // ofrecer un botón para reintentar con un toque.
-            state.scanRetryTimer = setTimeout(() => {
-                if (scannerVideo.readyState < scannerVideo.HAVE_ENOUGH_DATA) {
-                    showScanRetry('Toca para activar la cámara y escanear el QR');
-                }
-            }, 2200);
+            // el timer de salud ya programado arriba mostrará el botón de toque.
         } catch (err) {
             console.warn('Scanner camera error:', err);
             // Mantener la pantalla del escáner y reintentar con un toque.
@@ -561,6 +567,20 @@
 
     // ─── Camera ─────────────────────────────────────────────
     async function startCamera() {
+        // Activar la pantalla de cámara de inmediato para poder ofrecer el botón de
+        // toque si getUserMedia se cuelga (permiso sin gesto en iOS).
+        connectScreen.classList.remove('active');
+        cameraScreen.classList.add('active');
+
+        // Timer ANTES de getUserMedia: la promesa puede quedar colgada hasta que el
+        // usuario toque, así que el aviso debe poder mostrarse igualmente.
+        hideCamRetry();
+        state.camRetryTimer = setTimeout(() => {
+            if (localVideo && !localVideo.videoWidth) {
+                showCamRetry('Toca para activar la cámara');
+            }
+        }, 2500);
+
         try {
             const res = PHONECAM.RESOLUTIONS[state.currentResolution];
             const constraints = {
@@ -581,16 +601,6 @@
             localVideo.srcObject = state.stream;
             try { await localVideo.play(); } catch (e) { /* noop */ }
 
-            connectScreen.classList.remove('active');
-            cameraScreen.classList.add('active');
-
-            hideCamRetry();
-            state.camRetryTimer = setTimeout(() => {
-                if (localVideo && !localVideo.videoWidth) {
-                    showCamRetry('Toca para activar la cámara');
-                }
-            }, 2200);
-
             detectCapabilities();
 
             const videoTrack = state.stream.getVideoTracks()[0];
@@ -607,6 +617,8 @@
             console.error('Camera error:', err);
             showStatus('Error al acceder a la cámara: ' + err.message, 'error');
             connectBtn.disabled = false;
+            cameraScreen.classList.remove('active');
+            connectScreen.classList.add('active');
         }
     }
 
