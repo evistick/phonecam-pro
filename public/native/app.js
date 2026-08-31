@@ -20,9 +20,10 @@
         scanAnimationId: null,
         audioContext: null,
         gainNode: null,
-        facingMode: 'environment', // 'user' or 'environment'
+facingMode: 'environment', // 'user' or 'environment'
         flashOn: false,
         micOn: true,
+        rawVideoTrack: null,
         currentResolution: '1080p',
         currentFPS: 60,
         currentFilter: 'none',
@@ -552,6 +553,7 @@
             detectCapabilities();
 
             const videoTrack = state.stream.getVideoTracks()[0];
+            state.rawVideoTrack = videoTrack;
             const settings = videoTrack.getSettings();
             resolutionLabel.textContent = `${settings.width}x${settings.height}`;
 
@@ -713,6 +715,7 @@
                 }
             }
 
+            state.rawVideoTrack = state.stream.getVideoTracks()[0];
             const settings = state.stream.getVideoTracks()[0].getSettings();
             resolutionLabel.textContent = `${settings.width}x${settings.height}`;
 
@@ -744,6 +747,7 @@
         });
         if (!track) return;
         const audioTracks = rawStream.getAudioTracks();
+        state.rawVideoTrack = rawV;
         rawStream.removeTrack(rawV);
         state.stream = new MediaStream([track, ...audioTracks]);
         state.beautyOn = true;
@@ -758,6 +762,7 @@
         const processedStream = state.stream;
         const audioTracks = processedStream ? processedStream.getAudioTracks() : [];
         const rawV = PhoneCamBeauty.stop();
+        state.rawVideoTrack = rawV || state.rawVideoTrack;
         state.beautyOn = false;
         state.stream = new MediaStream([...(rawV ? [rawV] : []), ...audioTracks]);
         localVideo.srcObject = state.stream;
@@ -801,7 +806,7 @@
     }
 
     function toggleFlash() {
-        const track = state.stream?.getVideoTracks()[0];
+        const track = state.rawVideoTrack || state.stream?.getVideoTracks()[0];
         if (!track) return;
 
         const caps = track.getCapabilities ? track.getCapabilities() : {};
@@ -870,7 +875,7 @@
         state.currentResolution = preset;
         const res = PHONECAM.RESOLUTIONS[preset];
 
-        const track = state.stream?.getVideoTracks()[0];
+        const track = state.rawVideoTrack || state.stream?.getVideoTracks()[0];
         if (!track) return;
 
         try {
@@ -893,7 +898,7 @@
     async function changeFPS(fps) {
         state.currentFPS = fps;
 
-        const track = state.stream?.getVideoTracks()[0];
+        const track = state.rawVideoTrack || state.stream?.getVideoTracks()[0];
         if (!track) return;
 
         try {
@@ -977,7 +982,7 @@
     }
 
     async function applyZoom() {
-        const track = state.stream?.getVideoTracks()[0];
+        const track = state.rawVideoTrack || state.stream?.getVideoTracks()[0];
         if (!track) return;
 
         try {
@@ -990,7 +995,7 @@
     }
 
     async function applyExposure(value) {
-        const track = state.stream?.getVideoTracks()[0];
+        const track = state.rawVideoTrack || state.stream?.getVideoTracks()[0];
         if (!track) return;
 
         try {
@@ -1148,6 +1153,8 @@
     function disconnect() {
         Object.values(state.rtcs).forEach(rtc => rtc.close());
         if (state.socket) state.socket.disconnect();
+        if (state.beautyOn) { try { PhoneCamBeauty.stop(); } catch (e) { /* noop */ } state.beautyOn = false; }
+        if (state.rawVideoTrack) { try { state.rawVideoTrack.stop(); } catch (e) { /* noop */ } state.rawVideoTrack = null; }
         if (state.stream) state.stream.getTracks().forEach(t => t.stop());
         if (state.audioContext) state.audioContext.close();
 
