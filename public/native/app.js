@@ -40,6 +40,7 @@ facingMode: 'environment', // 'user' or 'environment'
         beautyOn: false,
         scanRetryTimer: null,
         camRetryTimer: null,
+        connectTimer: null,
         beautyConfig: { on: false, smooth: 85, glow: 62, sharp: 45, faceMode: true }
     };
 
@@ -368,6 +369,20 @@ facingMode: 'environment', // 'user' or 'environment'
         }
     }
 
+    // Vuelve a la pantalla de escáner / ingreso manual y detiene cualquier
+    // cámara que haya quedado activa tras una conexión fallida.
+    function returnToConnect() {
+        stopQRScanner();
+        if (state.stream) {
+            try { state.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* noop */ }
+            state.stream = null;
+        }
+        cameraScreen.classList.remove('active');
+        connectScreen.classList.add('active');
+        manualContainer.style.display = 'none';
+        scannerContainer.style.display = 'flex';
+    }
+
     function scanQRCodeFrame() {
         if (!state.isScanning) return;
 
@@ -503,15 +518,13 @@ facingMode: 'environment', // 'user' or 'environment'
             return;
         }
 
-        // Native app: use server from QR or saved, or manual IP input
-        let serverUrl = state.serverUrl;
-        if (!serverUrl) {
-            const manualIp = document.getElementById('server-input')?.value.trim();
-            if (manualIp) {
-                serverUrl = normalize(manualIp);
-            } else {
-                serverUrl = localStorage.getItem('phonecam-server') || null;
-            }
+        // Prefer the IP typed in manual mode; otherwise fall back to the QR/saved server.
+        const manualIp = document.getElementById('server-input')?.value.trim();
+        let serverUrl;
+        if (manualIp) {
+            serverUrl = normalize(manualIp);
+        } else {
+            serverUrl = state.serverUrl || localStorage.getItem('phonecam-server') || null;
         }
 
         if (!serverUrl) {
@@ -534,13 +547,31 @@ facingMode: 'environment', // 'user' or 'environment'
             reconnectionDelay: PHONECAM.RECONNECT.BASE_DELAY
         });
 
+        // Timeout: si tras 10s no conectó (ni connect ni connect_error), volver al
+        // escáner y avisar — evita quedarse en "Conectando..." para siempre.
+        if (state.connectTimer) clearTimeout(state.connectTimer);
+        state.connectTimer = setTimeout(() => {
+            if (!state.socket || state.socket.connected) return;
+            showStatus('No se pudo conectar al servidor. Verifica la IP.', 'error');
+            connectBtn.disabled = false;
+            try { state.socket.disconnect(); } catch (e) { /* noop */ }
+            returnToConnect();
+            startQRScanner();
+        }, 10000);
+
         state.socket.on('connect', () => {
             console.log('🔌 Socket connected');
+            if (state.connectTimer) { clearTimeout(state.connectTimer); state.connectTimer = null; }
             registerDevice();
             state.socket.emit('join-room', { room: state.roomId, role: 'mobile' }, (response) => {
                 if (response.error) {
                     showStatus('Sala no encontrada. Verifica el código.', 'error');
                     connectBtn.disabled = false;
+                    // No quedarse en una pantalla de cámara negra: volver al escáner/manual
+                    // y limpiar la sala guardada que ya no existe.
+                    returnToConnect();
+                    try { localStorage.removeItem(LAST_ROOM_KEY); } catch (e) { /* noop */ }
+                    startQRScanner();
                     return;
                 }
                 showStatus('Conectado, iniciando cámara...', 'success');
@@ -1243,6 +1274,7 @@ facingMode: 'environment', // 'user' or 'environment'
     }
 
     function disconnect() {
+        if (state.connectTimer) { clearTimeout(state.connectTimer); state.connectTimer = null; }
         Object.values(state.rtcs).forEach(rtc => rtc.close());
         if (state.socket) state.socket.disconnect();
         if (state.beautyOn) { try { PhoneCamBeauty.stop(); } catch (e) { /* noop */ } state.beautyOn = false; }
