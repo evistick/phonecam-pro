@@ -18,22 +18,44 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Get local IP ──────────────────────────────────────────────
+// Nombres de adaptadores que casi nunca son la red local real
+// (VPNs, virtualizacion, Bluetooth, etc.) → se puntúan más bajo.
+const VIRTUAL_ADAPTER_RE = /vpn|virtual|vmware|virtualbox|hyper|docker|tailscale|zerotier|pritunl|bluetooth|pan|tun|tap|vethernet|loopback_turbo|sstp/i;
+
 function getLocalIPs() {
     const interfaces = os.networkInterfaces();
     const ips = [];
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) ips.push(iface.address);
+            if (iface.family === 'IPv4' && !iface.internal) {
+                ips.push({ name, addr: iface.address });
+            }
         }
     }
-    return ips.length ? ips : ['127.0.0.1'];
+    return ips;
 }
 
-function getLocalIP() {
-    return getLocalIPs()[0];
+function ipScore(entry) {
+    let score = 0;
+    // Las IPs link-local (169.254.x.x, APIPA) no se pueden rutear → puntuación mínima.
+    if (entry.addr.startsWith('169.254.')) score -= 100;
+    // Preferir rangos privados LAN típicos sobre otras redes.
+    if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(entry.addr)) score += 20;
+    // Penalizar adaptadores virtuales (VPN, virtualización, Bluetooth PAN, etc.).
+    if (VIRTUAL_ADAPTER_RE.test(entry.name)) score -= 30;
+    return score;
 }
 
-const LOCAL_IP = getLocalIP();
+function bestLocalIP() {
+    const candidates = getLocalIPs();
+    if (!candidates.length) return '127.0.0.1';
+    // Ordenar por puntuación descendente; empate → el que liste el SO primero.
+    candidates.sort((a, b) => ipScore(b) - ipScore(a));
+    return candidates[0].addr;
+}
+
+const LOCAL_IP = bestLocalIP();
+const LOCAL_IPS = getLocalIPs().map(c => c.addr);
 
 // ─── SSL Certificates ──────────────────────────────────────────
 let server;
@@ -145,7 +167,7 @@ app.get('/api/info', (req, res) => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
     res.json({
         ip: LOCAL_IP,
-        ips: getLocalIPs(),
+        ips: LOCAL_IPS,
         port: PORT,
         protocol,
         httpPort: HTTP_PORT,
@@ -564,6 +586,7 @@ function startServer(cb) {
         console.log(`║  🎬 OBS:     ${protocol}://${LOCAL_IP}:${PORT}/obs/`);
         console.log('╠══════════════════════════════════════════════════╣');
         console.log(`║  🌐 Local IP: ${LOCAL_IP}`);
+        console.log(`║  📡 All IPs:  ${LOCAL_IPS.join(', ')}`);
         console.log(`║  🔌 HTTPS:   :${PORT}   HTTP (app): :${HTTP_PORT}`);
         console.log('╚══════════════════════════════════════════════════╝');
         console.log('');
