@@ -63,10 +63,6 @@
     const statsOverlay = $('#stats-overlay');
     const settingsPanel = $('#settings-panel');
     const beautyToggle = $('#beauty-toggle');
-    const beautySliders = $('#beauty-sliders');
-    const beautySmooth = $('#beauty-smooth');
-    const beautyGlow = $('#beauty-glow');
-    const beautySharp = $('#beauty-sharp');
     const quickBeautyBtn = $('#btn-quick-beauty');
 
     // ─── Initialize ─────────────────────────────────────────
@@ -161,28 +157,6 @@
         quickBeautyBtn.addEventListener('click', () => {
             applyBeautyConfig({ on: !state.beautyConfig.on });
             syncBeautyUI();
-            emitBeautyToPC();
-        });
-
-        // Beauty sliders
-        beautySmooth.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            $('#beauty-smooth-value').textContent = val + '%';
-            applyBeautyConfig({ smooth: val });
-            emitBeautyToPC();
-        });
-
-        beautyGlow.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            $('#beauty-glow-value').textContent = val + '%';
-            applyBeautyConfig({ glow: val });
-            emitBeautyToPC();
-        });
-
-        beautySharp.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            $('#beauty-sharp-value').textContent = val + '%';
-            applyBeautyConfig({ sharp: val });
             emitBeautyToPC();
         });
 
@@ -1149,16 +1123,6 @@
         beautyToggle.classList.toggle('active', !!cfg.on);
         beautyToggle.textContent = cfg.on ? 'Activado' : 'Desactivado';
         if (quickBeautyBtn) quickBeautyBtn.classList.toggle('active', !!cfg.on);
-        beautySliders.style.display = cfg.on ? 'block' : 'none';
-        beautySmooth.value = cfg.smooth;
-        beautyGlow.value = cfg.glow;
-        beautySharp.value = cfg.sharp;
-        $('#beauty-smooth-value').textContent = cfg.smooth + '%';
-        $('#beauty-glow-value').textContent = cfg.glow + '%';
-        $('#beauty-sharp-value').textContent = cfg.sharp + '%';
-        beautySmooth.disabled = !cfg.on;
-        beautyGlow.disabled = !cfg.on;
-        beautySharp.disabled = !cfg.on;
     }
 
     function emitBeautyToPC() {

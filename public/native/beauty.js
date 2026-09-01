@@ -201,7 +201,7 @@
         if (!beauty.smoothLms) {
             beauty.smoothLms = raw.map(pt => ({ x: pt.x, y: pt.y }));
         } else {
-            const alpha = 0.4; // más bajo = más suave pero algo más lento
+            const alpha = 0.3; // más bajo = más suave/estable, menos jitter de la máscara
             for (let i = 0; i < raw.length; i++) {
                 const s = beauty.smoothLms[i], r = raw[i];
                 s.x += (r.x - s.x) * alpha;
@@ -298,10 +298,24 @@
             m.fill();
         };
 
-        // 1) Toda la cara (frente, mejillas, mandíbula): suavizado completo.
-        //    Se expande muy poco para que el borde coincida con el contorno del
-        //    rostro y no invada el fondo ni el cabello (evita borde de "máscara").
-        const oval = expandPoly(convexHull(ringPts(FACE_OVAL_RING)), 1.02);
+        // 1) Toda la cara (frente, mejillas, mandíbula y cuello visible):
+        //    se amplía con un punto de cuello extrapolado desde la barbilla para
+        //    que el suavizado NO "recorte" en la línea de la mandíbula (que era
+        //    donde más se notaba la máscara). Con el blur grande el borde queda
+        //    invisible ante pequeños movimientos.
+        const ovalPts = ringPts(FACE_OVAL_RING);
+        const chin = lms[152], brow = lms[10];
+        if (chin && brow) {
+            const dx = chin.x - brow.x, dy = chin.y - brow.y;
+            const len = Math.max(0.0001, Math.hypot(dx, dy));
+            const marina = (dy / len) || 0;
+            // Cuello: unos puntos por debajo de la barbilla, ensanchados.
+            const nY = chin.y + marina * 0.10;
+            ovalPts.push([chin.x * mw, nY * mh]);
+            ovalPts.push([(chin.x - dx * 0.22) * mw, nY * mh * 1.06]);
+            ovalPts.push([(chin.x + dx * 0.22) * mw, nY * mh * 1.06]);
+        }
+        const oval = expandPoly(convexHull(ovalPts), 1.06);
         fillPoly(oval, 255);
 
         // 2) Rasgos a proteger con transición suave: cejas y ojos (duras),
@@ -320,7 +334,10 @@
 
         const mb = beauty.maskBlurCtx;
         mb.clearRect(0, 0, mw, mh);
-        mb.filter = 'blur(' + Math.max(2, Math.round(mh / 22)) + 'px)';
+        // Blur GRANDE de la máscara: el borde entre piel suavizada y el resto
+        // queda totalmente difuminado, de modo que NO se vea el contorno de un
+        // "parche"/máscara. Antes mh/22 dejaba una línea perceptible.
+        mb.filter = 'blur(' + Math.max(6, Math.round(mh / 7.5)) + 'px)';
         mb.drawImage(beauty.maskCanvas, 0, 0);
         mb.filter = 'none';
         m.clearRect(0, 0, mw, mh);
@@ -348,7 +365,9 @@
         ctx.save();
         ctx.globalCompositeOperation = 'source-over';
         if (smoothK > 0) {
-            ctx.globalAlpha = 0.35 + smoothK * 0.5;
+            // Opacidad contenida para que el suavizado sea perceptible pero
+            // natural (no un velo evidente). Se funde sobre la cara.
+            ctx.globalAlpha = 0.22 + smoothK * 0.38;
             ctx.drawImage(beauty.skinLayer, 0, 0, sw, sh, 0, 0, W, H);
         }
 
@@ -387,7 +406,7 @@
         // Detalle nítido encima (textura de poros sin arrugas → NÍTIDO)
         if (smoothK > 0 && sharpK > 0) {
             ctx.globalCompositeOperation = 'overlay';
-            ctx.globalAlpha = 0.25 + sharpK * 0.5;
+            ctx.globalAlpha = 0.18 + sharpK * 0.35;
             ctx.drawImage(beauty.sharpLayer, 0, 0, W, H);
         }
         ctx.restore();

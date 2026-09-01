@@ -33,9 +33,9 @@
         vcamCtx: null,
         vcamW: 0,
         vcamH: 0,
-        smooth: 0,
-        glow: 0,
-        sharp: 0,
+        smooth: 65,
+        glow: 35,
+        sharp: 40,
         devices: [],
         activeDeviceId: null,
         smoothCanvas: null,
@@ -63,7 +63,7 @@
         maskBlur: null,
         maskBlurCtx: null,
         previewRAF: null,
-        dest: 'pc',
+        dest: 'phone',
         audioCtx: null,
         audioAnalyser: null,
         audioRAF: null,
@@ -1179,12 +1179,9 @@ if (!state.vcamActive || !state.remoteStream) return;
             lbl.textContent = state.beautyEnabled ? 'Activado' : 'Desactivado';
             const qb = $('#btn-beauty-quick');
             if (qb) qb.classList.toggle('active', state.beautyEnabled);
-            if (state.beautyEnabled) {
-                if (state.smooth > 0) startPreviewLoop();
-            } else {
-                stopPreviewLoop();
-            }
-            if (state.dest === 'phone') emitBeautyConfig();
+            // El filtro siempre lo procesa el iPhone (dest fijo en 'phone'):
+            // solo se manda la config y el iPhone aplica el filtro on-device.
+            emitBeautyConfig();
         });
 
         // Quick beauty toggle in the video toolbar
@@ -1204,26 +1201,8 @@ if (!state.vcamActive || !state.remoteStream) return;
             });
         }
 
-        // Processing destination: PC (local) or iPhone (on-device)
-        document.querySelectorAll('#d-dest-group button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.classList.contains('active')) return;
-                document.querySelectorAll('#d-dest-group button').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                state.dest = btn.dataset.value;
-                if (state.dest === 'phone') {
-                    if (state.previewRAF) stopPreviewLoop();
-                    emitBeautyConfig();
-                } else {
-                    state.socket.emit('beauty-config', { on: false });
-                    if (state.smooth > 0 && state.beautyEnabled) {
-                        startPreviewLoop();
-                    } else {
-                        applyPreviewFilter();
-                    }
-                }
-            });
-        });
+        // El filtro de belleza siempre lo procesa el iPhone (on-device, dest fijo
+        // en 'phone'): no hay selector de destino.
 
         // Overlays
         $('#d-overlay-text').addEventListener('input', (e) => {
