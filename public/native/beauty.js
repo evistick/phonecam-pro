@@ -25,10 +25,6 @@
     const RING_LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
     const RING_RIGHT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
     const RING_MOUTH = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 42, 183, 78];
-    // Zona de los cachetes (mejillas): se les da un suavizado/aclarado extra suave.
-    const LEFT_CHEEK_CTR = [205, 203, 206, 207, 50, 123, 117, 118, 119, 101, 36];
-    const RIGHT_CHEEK_CTR = [432, 436, 435, 425, 281, 352, 367, 347, 346, 371, 401];
-    const NOSE_TIP = 1; // punta de la nariz, para dimensionar el radio del cachete.
     function convexHull(pts) {
         pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
         const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -129,10 +125,6 @@
             beauty.mask2Ctx = beauty.mask2.getContext('2d');
             beauty.skin = document.createElement('canvas');
             beauty.skinCtx = beauty.skin.getContext('2d');
-            beauty.cheek = document.createElement('canvas');
-            beauty.cheekCtx = beauty.cheek.getContext('2d');
-            beauty.lip = document.createElement('canvas');
-            beauty.lipCtx = beauty.lip.getContext('2d');
         }
         beauty.out.width = W; beauty.out.height = H;
         beauty.lowW = Math.max(64, Math.round(W / 2));
@@ -144,8 +136,6 @@
         beauty.maskH = Math.max(28, Math.round(H / 5));
         beauty.mask.width = beauty.maskW; beauty.mask.height = beauty.maskH;
         beauty.mask2.width = beauty.maskW; beauty.mask2.height = beauty.maskH;
-        beauty.cheek.width = beauty.maskW; beauty.cheek.height = beauty.maskH;
-        beauty.lip.width = beauty.maskW; beauty.lip.height = beauty.maskH;
         beauty.skinW = beauty.lowW; beauty.skinH = beauty.lowH;
         beauty.skin.width = beauty.skinW; beauty.skin.height = beauty.skinH;
         beauty.maskValid = false;
@@ -223,15 +213,6 @@
         return pts.length >= 3 ? convexHull(pts) : [];
     }
 
-    function centroidOf(idxs, mw, mh) {
-        const lms = beauty.lm;
-        if (!lms) return null;
-        let cx = 0, cy = 0, n = 0;
-        for (const i of idxs) { const p = lms[i]; if (p) { cx += p.x; cy += p.y; n++; } }
-        if (!n) return null;
-        return [cx / n * mw, cy / n * mh];
-    }
-
     // Construye la máscara de piel por color limitada al contorno facial.
     function buildSkinMask() {
         const mw = beauty.maskW, mh = beauty.maskH;
@@ -281,56 +262,7 @@
         mask.clearRect(0, 0, mw, mh);
         mask.drawImage(beauty.mask2, 0, 0);
 
-        // 6) Máscaras de región: cachetes (suavizado/aclarado extra) y labios (clarear).
-        const cheekR = Math.max(2, Math.round(mw * 0.09));
-        const noseC = centroidOf([NOSE_TIP], mw, mh);
-        const cheekCtx = beauty.cheekCtx;
-        cheekCtx.clearRect(0, 0, mw, mh);
-        if (noseC) {
-            cheekCtx.fillStyle = '#fff';
-            const lc = centroidOf(LEFT_CHEEK_CTR, mw, mh);
-            const rc = centroidOf(RIGHT_CHEEK_CTR, mw, mh);
-            if (lc) cheekCircle(cheekCtx, lc, cheekR);
-            if (rc) cheekCircle(cheekCtx, rc, cheekR);
-        }
-        // Restringir cachetes a la zona de piel ya validada (máscara de piel).
-        cheekCtx.globalCompositeOperation = 'destination-in';
-        cheekCtx.drawImage(beauty.mask, 0, 0);
-        cheekCtx.globalCompositeOperation = 'source-over';
-        cheekCtx.filter = 'blur(' + Math.max(2, Math.round(mh / 20)) + 'px)';
-        cheekCtx.drawImage(beauty.cheek, 0, 0);
-        cheekCtx.filter = 'none';
-        // Redibujar tras el blur (necesario: blur sobre sí mismo se acumula en blanco).
-        const cheekTmp = beauty.mask2Ctx;
-        cheekTmp.clearRect(0, 0, mw, mh);
-        cheekTmp.drawImage(beauty.cheek, 0, 0);
-        cheekCtx.clearRect(0, 0, mw, mh);
-        cheekCtx.drawImage(cheekTmp.canvas, 0, 0);
-
-        // Labios: usar el contorno de la boca como zona.
-        const lipCtx = beauty.lipCtx;
-        lipCtx.clearRect(0, 0, mw, mh);
-        const mouthPoly = hullOf(RING_MOUTH, mw, mh);
-        if (mouthPoly.length) {
-            lipCtx.fillStyle = '#fff';
-            tracePoly(lipCtx, expandPoly(mouthPoly, 0.85));
-            lipCtx.filter = 'blur(' + Math.max(2, Math.round(mh / 28)) + 'px)';
-            lipCtx.drawImage(beauty.lip, 0, 0);
-            lipCtx.filter = 'none';
-            const lipTmp = beauty.mask2Ctx;
-            lipTmp.clearRect(0, 0, mw, mh);
-            lipTmp.drawImage(beauty.lip, 0, 0);
-            lipCtx.clearRect(0, 0, mw, mh);
-            lipCtx.drawImage(lipTmp.canvas, 0, 0);
-        }
-
         beauty.maskValid = true;
-    }
-
-    function cheekCircle(ctx, c, r) {
-        ctx.beginPath();
-        ctx.arc(c[0], c[1], r, 0, Math.PI * 2);
-        ctx.fill();
     }
 
     // Aplica suavizado + aclarado sobre la cara (máscara de piel).
@@ -374,49 +306,6 @@
             ctx.globalCompositeOperation = 'overlay';
             ctx.globalAlpha = 0.08 + glowK * 0.22;
             ctx.drawImage(beauty.skin, 0, 0, beauty.skinW, beauty.skinH, 0, 0, beauty.width, beauty.height);
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = 1;
-        }
-
-        const cw = beauty.skinW, chh = beauty.skinH;
-        const s = beauty.skinCtx;
-        // Cachetes: suavizado extra (repintar la cara ya suavizada solo ahí).
-        if (smoothK > 0 && beauty.maskValid) {
-            s.clearRect(0, 0, cw, chh);
-            s.globalCompositeOperation = 'copy';
-            s.drawImage(beauty.face, 0, 0, beauty.faceW, beauty.faceH, 0, 0, cw, chh);
-            s.globalCompositeOperation = 'destination-in';
-            s.drawImage(beauty.cheek, 0, 0, beauty.maskW, beauty.maskH, 0, 0, cw, chh);
-            s.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = Math.min(0.6, 0.2 + smoothK * 0.4);
-            ctx.drawImage(beauty.skin, 0, 0, cw, chh, 0, 0, beauty.width, beauty.height);
-            ctx.globalAlpha = 1;
-        }
-        // Cachetes: aclarado (whiten) extra suave.
-        if (glowK > 0 && beauty.maskValid) {
-            s.clearRect(0, 0, cw, chh);
-            s.fillStyle = '#ffffff';
-            s.fillRect(0, 0, cw, chh);
-            s.globalCompositeOperation = 'destination-in';
-            s.drawImage(beauty.cheek, 0, 0, beauty.maskW, beauty.maskH, 0, 0, cw, chh);
-            s.globalCompositeOperation = 'source-over';
-            ctx.globalCompositeOperation = 'overlay';
-            ctx.globalAlpha = 0.1 + glowK * 0.12;
-            ctx.drawImage(beauty.skin, 0, 0, cw, chh, 0, 0, beauty.width, beauty.height);
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = 1;
-        }
-        // Labios: aclarado suave (screen añade luz sin saturar).
-        if (glowK > 0 && beauty.maskValid) {
-            s.clearRect(0, 0, cw, chh);
-            s.fillStyle = '#ffffff';
-            s.fillRect(0, 0, cw, chh);
-            s.globalCompositeOperation = 'destination-in';
-            s.drawImage(beauty.lip, 0, 0, beauty.maskW, beauty.maskH, 0, 0, cw, chh);
-            s.globalCompositeOperation = 'source-over';
-            ctx.globalCompositeOperation = 'screen';
-            ctx.globalAlpha = 0.18 + glowK * 0.12;
-            ctx.drawImage(beauty.skin, 0, 0, cw, chh, 0, 0, beauty.width, beauty.height);
             ctx.globalCompositeOperation = 'source-over';
             ctx.globalAlpha = 1;
         }
