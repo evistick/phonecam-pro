@@ -271,7 +271,8 @@
         const glowK = beauty.params.glow / 100;
 
         // Blur del frame en baja resolución (barato) → imagen suavizada.
-        const blurPx = Math.max(2, Math.round(beauty.width / 160));
+        // w/90 da un difuminado claramente visible (look belleza marcada).
+        const blurPx = Math.max(3, Math.round(beauty.width / 90));
         const lowCtx = beauty.lowCtx;
         lowCtx.filter = 'blur(' + blurPx + 'px)';
         lowCtx.drawImage(beauty.out, 0, 0, beauty.lowW, beauty.lowH);
@@ -286,9 +287,9 @@
         f.globalCompositeOperation = 'source-over';
 
         const ctx = beauty.outCtx;
-        // Suavizado perceptible pero natural.
+        // Suavizado marcado tipo Instagram (piel bien lisa, sin plastificar del todo).
         if (smoothK > 0) {
-            ctx.globalAlpha = Math.min(0.85, 0.3 + smoothK * 0.55);
+            ctx.globalAlpha = Math.min(0.95, 0.45 + smoothK * 0.55);
             ctx.drawImage(beauty.face, 0, 0, beauty.faceW, beauty.faceH, 0, 0, beauty.width, beauty.height);
             ctx.globalAlpha = 1;
         }
@@ -303,7 +304,7 @@
             s.drawImage(beauty.mask, 0, 0, beauty.maskW, beauty.maskH, 0, 0, beauty.skinW, beauty.skinH);
             s.globalCompositeOperation = 'source-over';
             ctx.globalCompositeOperation = 'overlay';
-            ctx.globalAlpha = 0.05 + glowK * 0.16;
+            ctx.globalAlpha = 0.08 + glowK * 0.22;
             ctx.drawImage(beauty.skin, 0, 0, beauty.skinW, beauty.skinH, 0, 0, beauty.width, beauty.height);
             ctx.globalCompositeOperation = 'source-over';
             ctx.globalAlpha = 1;
