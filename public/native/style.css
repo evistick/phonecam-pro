@@ -164,11 +164,16 @@ html, body {
 }
 
 /* Tela oscura que cubre toda la pantalla del escáner para no ver la cámara en crudo.
-   position:fixed + inset:0 asegura que tape todo el viewport aunque el contenedor
-   tenga un alto mal calculado al primer render vertical en iOS. */
+   position:fixed llena todo el viewport real (incluso la zona de la barra inferior
+   de iOS) sin depender del alto del contenedor, evitando el "agujero abajo" que se
+   veía en el primer render vertical. */
 .scanner-dim {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
     background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.62) 100%);
     z-index: 5;
     pointer-events: none;

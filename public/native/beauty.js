@@ -146,8 +146,28 @@
         if (beauty.landmarker) return true;
         if (beauty.loading) return beauty.loading;
         beauty.loading = (async () => {
+            const timeout = 12000;
+            const deadline = performance.now() + timeout;
             try {
-                const { FaceLandmarker, FilesetResolver } = await import(beauty.vendorBase + 'vision_bundle.mjs');
+                // 1) Preferir el boot module estático (window.__mp), que es más
+                //    fiable en WKWebView que el import() dinámico. Si aún no ha
+                //    terminado de cargar, se espera en bucle corto.
+                let mp = window.__mp;
+                while (!mp && performance.now() < deadline) {
+                    await new Promise(r => setTimeout(r, 50));
+                    mp = window.__mp;
+                }
+                // 2) Fallback: import() dinámico (cubrir navegadores de escritorio).
+                if (!mp) {
+                    try {
+                        mp = await import(beauty.vendorBase + 'vision_bundle.mjs');
+                    } catch (e) { /* seguimos probando, abajo */ }
+                }
+                if (!mp || !mp.FaceLandmarker) {
+                    console.warn('Beauty detector: MediaPipe API no disponible', !!mp);
+                    return false;
+                }
+                const { FaceLandmarker, FilesetResolver } = mp;
                 const files = await FilesetResolver.forVisionTasks(beauty.vendorBase + 'wasm');
                 beauty.landmarker = await FaceLandmarker.createFromOptions(files, {
                     baseOptions: { modelAssetPath: beauty.vendorBase + 'face_landmarker.task', delegate: 'CPU' },
@@ -442,14 +462,10 @@
                     }
                 } catch (e) { /* noop */ }
             }
-            // buildFaceLayer() ya retorna sin tocar la imagen si no hay cara
-            // detectada (belleza recién activada o cara fuera de cuadro), así el
-            // suavizado NUNCA se aplica a todo el frame por error.
+            // El suavizado se aplica SOLO sobre la cara detectada (máscara).
+            // buildFaceLayer() retorna sin tocar la imagen si no hay cara, por lo
+            // que el resto del frame queda siempre nítido.
             buildFaceLayer();
-        } else if (beauty.params.smooth || beauty.params.glow) {
-            // Fallback sin detección de rostro solo si se pidió explícitamente
-            // desactivar el modo cara (p.ej. filtro "suavizar todo el video").
-            wholeFrameSmooth();
         }
     }
 
@@ -475,7 +491,16 @@
             if (!beauty.canvas) ensureCanvas(1280, 720);
             if (beauty.params.faceMode) {
                 const ok = await ensureDetector();
-                if (!ok) beauty.params.faceMode = false;
+                if (!ok) {
+                    // No se pudo cargar la detección de rostro: NO emborronar todo
+                    // el frame. Se deja la imagen limpia y se avisa.
+                    beauty.params.faceMode = false;
+                    beauty.params.smooth = 0;
+                    beauty.params.glow = 0;
+                    if (root.dispatchEvent) {
+                        root.dispatchEvent(new CustomEvent('beauty-detector-unavailable'));
+                    }
+                }
             }
             if (!beauty.outStream) {
                 beauty.outStream = beauty.canvas.captureStream(Math.min(30, opts.fps || 30));

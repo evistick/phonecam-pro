@@ -1318,6 +1318,16 @@ facingMode: 'environment', // 'user' or 'environment'
         }
     });
 
+    document.addEventListener('beauty-detector-unavailable', () => {
+        // El detector de rostro no cargó: se revierte la belleza y se avisa para
+        // no quedarse con un "Activado" que no hace nada ni emborrona el video.
+        if (state.beautyOn) stopBeauty();
+        state.beautyConfig.on = false;
+        state.beautyConfig.faceMode = true;
+        syncBeautyUI();
+        if (beautyToggle) beautyToggle.textContent = 'Error belleza';
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
         init();
         requestWakeLock();
