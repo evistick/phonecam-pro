@@ -832,7 +832,7 @@ facingMode: 'environment', // 'user' or 'environment'
         const cfg = state.beautyConfig;
         const track = await PhoneCamBeauty.start({
             rawStream: rawStream,
-            fps: Math.min(30, state.currentFPS),
+            fps: Math.min(60, state.currentFPS),
             vendorBase: 'vendor/mediapipe/',
             smooth: cfg.smooth,
             glow: cfg.glow,
