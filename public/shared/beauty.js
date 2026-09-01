@@ -25,8 +25,6 @@
     const RING_LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
     const RING_RIGHT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
     const RING_MOUTH = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 42, 183, 78];
-    const RING_NOSE = [168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 98, 327, 326, 328, 289, 298, 331, 309, 3, 51, 218, 219, 220, 115, 48, 64, 98];
-
     function convexHull(pts) {
         pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
         const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -240,11 +238,13 @@
         m2.fillStyle = '#fff';
         tracePoly(m2, expandPoly(hullOf(FACE_OVAL_RING, mw, mh), 1.05));
 
-        // Restar rasgos (ojos, cejas, boca, nariz) dentro de la silueta.
+        // Restar rasgos que NO deben llevar filtro: cejas, ojos y boca.
+        // La NARIZ se deja DENTRO (es piel): así recibe blanqueador y suavizado.
+        // Las fosas nasales (oscuras) se excluyen solas con el test de color YCrCb.
         m2.globalCompositeOperation = 'destination-out';
         m2.fillStyle = '#fff';
-        for (const ring of [RING_LEFT_BROW, RING_RIGHT_BROW, RING_LEFT_EYE, RING_RIGHT_EYE, RING_MOUTH, RING_NOSE]) {
-            tracePoly(m2, expandPoly(hullOf(ring, mw, mh), 1.2));
+        for (const ring of [RING_LEFT_BROW, RING_RIGHT_BROW, RING_LEFT_EYE, RING_RIGHT_EYE, RING_MOUTH]) {
+            tracePoly(m2, expandPoly(hullOf(ring, mw, mh), 1.15));
         }
         m2.globalCompositeOperation = 'source-over';
 
