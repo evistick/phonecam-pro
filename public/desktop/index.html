@@ -48,14 +48,21 @@
                     <div class="connect-content">
                         <div class="connect-icon">📸</div>
                         <h2>Conecta tu teléfono</h2>
-                        <p class="connect-desc">Escanea el QR code con tu teléfono o ingresa el código manualmente</p>
+                        <p class="connect-desc">Escanea el QR con tu teléfono para empezar</p>
+
+                        <div class="connect-mode-selector">
+                            <button id="mode-app" class="mode-btn active" data-mode="app">📱 Conectar con la App</button>
+                            <button id="mode-web" class="mode-btn" data-mode="web">🌐 Navegador web</button>
+                        </div>
+
+                        <div id="mode-title" class="mode-title">Escanea con la App de PhoneCam</div>
 
                         <div id="qr-container">
                             <div id="qr-loading" class="qr-placeholder">
                                 <div class="spinner"></div>
                                 <span>Generando código...</span>
                             </div>
-                            <img id="qr-image" alt="QR Code" style="display:none;">
+                            <img id="qr-image" alt="Código QR" style="display:none;">
                         </div>
 
                         <div class="room-code-display">
@@ -65,9 +72,9 @@
                         </div>
 
                         <div class="connect-url">
-                            <span class="url-label">URL móvil</span>
+                            <span class="url-label">Dirección móvil</span>
                             <span id="mobile-url" class="url-text">---</span>
-                            <button id="btn-copy-url" class="copy-btn" title="Copiar URL">📋</button>
+                            <button id="btn-copy-url" class="copy-btn" title="Copiar dirección">📋</button>
                         </div>
 
                         <button id="btn-new-room" class="btn-secondary">🔄 Generar nuevo código</button>

@@ -461,6 +461,43 @@ body.dragging .win:not(.win-dragging) {
     margin-right: auto;
 }
 
+.connect-mode-selector {
+    display: flex;
+    gap: 8px;
+    margin: 0 auto 12px;
+    max-width: 300px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.mode-title {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
 #qr-container {
     width: 168px;
     height: 168px;

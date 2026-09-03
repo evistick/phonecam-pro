@@ -155,19 +155,19 @@ app.get('/obs/', (req, res) => {
 // QR Code API
 app.get('/api/qrcode/:room', async (req, res) => {
     const room = req.params.room;
-    // Use HTTPS (port 3000) para el QR: así, si se abre en un NAVEGADOR
-    // (Safari/Chrome/Android) la cámara funciona (los navegadores la bloquean
-    // en HTTP). La app nativa del iPhone ignora el puerto y usa HTTP:3001,
-    // por lo que sigue funcionando igual con este mismo QR.
     // La IP se recalcula en vivo para que refleje la red actual.
-    const url = `https://${getServerIP()}:${PORT}/mobile/?room=${room}`;
+    const ip = getServerIP();
+    // QR para la APP nativa del iPhone: HTTP (que la app usa sin TLS).
+    const appUrl = `http://${ip}:${HTTP_PORT}/mobile/?room=${room}`;
+    // QR para el NAVEGADOR web: HTTPS (los navegadores bloquean la cámara en HTTP).
+    const webUrl = `https://${ip}:${PORT}/mobile/?room=${room}`;
     try {
-        const qrDataUrl = await QRCode.toDataURL(url, {
-            width: 300,
-            margin: 2,
-            color: { dark: '#000000', light: '#ffffff' }
-        });
-        res.json({ qr: qrDataUrl, url });
+        const opts = { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } };
+        const [appQr, webQr] = await Promise.all([
+            QRCode.toDataURL(appUrl, opts),
+            QRCode.toDataURL(webUrl, opts)
+        ]);
+        res.json({ qr: webQr, url: webUrl, appQr, appUrl, webQr, webUrl });
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate QR code' });
     }

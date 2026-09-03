@@ -37,6 +37,9 @@
         glow: 35,
         sharp: 40,
         devices: [],
+        connectMode: 'app',
+        qrApp: null, urlApp: null,
+        qrWeb: null, urlWeb: null,
         activeDeviceId: null,
         smoothCanvas: null,
         smoothCtx: null,
@@ -223,18 +226,37 @@ state.socket.on('peer-joined', (data) => {
     // ─── Room Management ────────────────────────────────────
     // Refresca el QR con la IP ACTUAL del servidor (se recalcula en vivo en cada
     // petición). Así, si el PC cambia de red/IP, el QR mostrado se actualiza.
+    // Se traen los DOS QR (App y Navegador web) y se muestra el del modo activo.
     async function refreshQr(room) {
         const r = room || state.roomId;
         if (!r) return;
         try {
             const res = await fetch(`/api/qrcode/${r}`);
             const data = await res.json();
-            qrImage.src = data.qr;
-            qrImage.style.display = 'block';
-            qrLoading.style.display = 'none';
-            mobileUrl.textContent = data.url;
+            state.qrApp = data.appQr; state.urlApp = data.appUrl;
+            state.qrWeb = data.webQr; state.urlWeb = data.webUrl;
+            applyConnectMode(state.connectMode);
         } catch (err) {
             console.error('QR code error:', err);
+        }
+    }
+
+    // Muestra el QR y la dirección según el modo elegido: 'app' o 'web'.
+    function applyConnectMode(mode) {
+        state.connectMode = mode;
+        const isApp = mode === 'app';
+        qrImage.src = isApp ? state.qrApp : state.qrWeb;
+        qrImage.style.display = 'block';
+        qrLoading.style.display = 'none';
+        const url = isApp ? state.urlApp : state.urlWeb;
+        mobileUrl.textContent = url || '---';
+        $('#mode-app').classList.toggle('active', isApp);
+        $('#mode-web').classList.toggle('active', !isApp);
+        const title = document.getElementById('mode-title');
+        if (title) {
+            title.textContent = isApp
+                ? 'Escanea con la App de PhoneCam'
+                : 'Escanea y se abrirá el navegador con la cámara web';
         }
     }
 
@@ -1054,6 +1076,10 @@ if (!state.vcamActive || !state.remoteStream) return;
             copyToClipboard(mobileUrl.textContent);
             showToast('📋 URL copiada', 'success');
         });
+
+        // Conectar por web / por app: eligir qué QR mostrar
+        $('#mode-app').addEventListener('click', () => applyConnectMode('app'));
+        $('#mode-web').addEventListener('click', () => applyConnectMode('web'));
 
         // Virtual camera toggle
         $('#btn-vcam').addEventListener('click', toggleVirtualCamera);
