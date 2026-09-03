@@ -221,6 +221,23 @@ state.socket.on('peer-joined', (data) => {
     }
 
     // ─── Room Management ────────────────────────────────────
+    // Refresca el QR con la IP ACTUAL del servidor (se recalcula en vivo en cada
+    // petición). Así, si el PC cambia de red/IP, el QR mostrado se actualiza.
+    async function refreshQr(room) {
+        const r = room || state.roomId;
+        if (!r) return;
+        try {
+            const res = await fetch(`/api/qrcode/${r}`);
+            const data = await res.json();
+            qrImage.src = data.qr;
+            qrImage.style.display = 'block';
+            qrLoading.style.display = 'none';
+            mobileUrl.textContent = data.url;
+        } catch (err) {
+            console.error('QR code error:', err);
+        }
+    }
+
     function createRoom() {
         state.socket.emit('create-room', async (response) => {
             state.roomId = response.roomId;
@@ -228,18 +245,7 @@ state.socket.on('peer-joined', (data) => {
             console.log('🏠 Room created:', response.roomId);
 
             // Fetch QR code
-            try {
-                const res = await fetch(`/api/qrcode/${response.roomId}`);
-                const data = await res.json();
-
-                qrImage.src = data.qr;
-                qrImage.style.display = 'block';
-                qrLoading.style.display = 'none';
-                mobileUrl.textContent = data.url;
-            } catch (err) {
-                console.error('QR code error:', err);
-                qrLoading.querySelector('span').textContent = 'Error al generar QR';
-            }
+            await refreshQr(state.roomId);
 
             // Setup WebRTC for this room
             setupWebRTC();
@@ -257,6 +263,10 @@ state.socket.on('peer-joined', (data) => {
             }
         });
     }
+
+    // Mantiene el QR siempre con la IP actual (por si cambia la red en medio de
+    // la sesión). Cada 25s re-sincroniza el QR con el servidor.
+    setInterval(() => refreshQr(), 25000);
 
     // ─── Device Discovery ────────────────────────────────────
     function renderDevices() {

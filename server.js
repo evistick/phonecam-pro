@@ -54,6 +54,13 @@ function bestLocalIP() {
     return candidates[0].addr;
 }
 
+// IP calculada EN VIVO en cada petición: así, si el usuario cambia de red
+// (y de IP) mientras el servidor sigue corriendo, el QR siempre refleja la IP
+// actual y la conexión del iPhone sigue funcionando.
+function getServerIP() {
+    return bestLocalIP();
+}
+
 const LOCAL_IP = bestLocalIP();
 const LOCAL_IPS = getLocalIPs().map(c => c.addr);
 
@@ -148,8 +155,9 @@ app.get('/obs/', (req, res) => {
 // QR Code API
 app.get('/api/qrcode/:room', async (req, res) => {
     const room = req.params.room;
-    // Use the HTTP port for the QR: native app connects without TLS hassle
-    const url = `http://${LOCAL_IP}:${HTTP_PORT}/mobile/?room=${room}`;
+    // Use the HTTP port for the QR: native app connects without TLS hassle.
+    // La IP se recalcula en vivo para que refleje la red actual.
+    const url = `http://${getServerIP()}:${HTTP_PORT}/mobile/?room=${room}`;
     try {
         const qrDataUrl = await QRCode.toDataURL(url, {
             width: 300,
@@ -166,8 +174,8 @@ app.get('/api/qrcode/:room', async (req, res) => {
 app.get('/api/info', (req, res) => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
     res.json({
-        ip: LOCAL_IP,
-        ips: LOCAL_IPS,
+        ip: getServerIP(),
+        ips: getLocalIPs().map(c => c.addr),
         port: PORT,
         protocol,
         httpPort: HTTP_PORT,
@@ -342,7 +350,7 @@ socketServer.on('connection', (socket) => {
         socket.join(roomId);
         console.log(`🏠 Room created: ${roomId} by ${socket.id}`);
         if (typeof callback === 'function') {
-            callback({ roomId, ip: LOCAL_IP, port: PORT });
+            callback({ roomId, ip: getServerIP(), port: PORT });
         }
     });
 
