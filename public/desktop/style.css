@@ -490,6 +490,19 @@ body.dragging .win:not(.win-dragging) {
     color: #fff;
 }
 
+.mode-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.mode-ico {
+    flex-shrink: 0;
+    display: inline-block;
+    vertical-align: middle;
+}
+
 .mode-title {
     text-align: center;
     color: var(--text-secondary);
