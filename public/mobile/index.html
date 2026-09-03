@@ -3,6 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+    <script>
+        // La camara en un navegador SOLO funciona sobre HTTPS. Si esta pagina se
+        // abrio por HTTP (puerto 3001, pensado para la app nativa), redirigimos
+        // automaticamente a HTTPS (puerto 3000) conservando la sala (?room=).
+        // Asi cualquier dispositivo puede usar la camara desde el navegador.
+        (function () {
+            if (location.protocol === 'http:' && location.hostname) {
+                var port = 3000;
+                var target = 'https://' + location.hostname + ':' + port + location.pathname + location.search;
+                location.replace(target);
+            }
+        })();
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PhoneCam Pro">

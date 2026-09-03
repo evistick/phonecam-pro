@@ -155,9 +155,12 @@ app.get('/obs/', (req, res) => {
 // QR Code API
 app.get('/api/qrcode/:room', async (req, res) => {
     const room = req.params.room;
-    // Use the HTTP port for the QR: native app connects without TLS hassle.
+    // Use HTTPS (port 3000) para el QR: así, si se abre en un NAVEGADOR
+    // (Safari/Chrome/Android) la cámara funciona (los navegadores la bloquean
+    // en HTTP). La app nativa del iPhone ignora el puerto y usa HTTP:3001,
+    // por lo que sigue funcionando igual con este mismo QR.
     // La IP se recalcula en vivo para que refleje la red actual.
-    const url = `http://${getServerIP()}:${HTTP_PORT}/mobile/?room=${room}`;
+    const url = `https://${getServerIP()}:${PORT}/mobile/?room=${room}`;
     try {
         const qrDataUrl = await QRCode.toDataURL(url, {
             width: 300,
